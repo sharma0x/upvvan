@@ -1,0 +1,139 @@
+# =============================================================================
+# Upvvan — Local Development Services
+# =============================================================================
+# Start: docker compose -f infra/dev-services.yml up -d
+# Stop:  docker compose -f infra/dev-services.yml down
+# Reset: docker compose -f infra/dev-services.yml down -v
+#
+# Per STACK-DECISION.md, this file adds NO service beyond Postgres 18 + object
+# storage + the two dev conveniences. There is no Redis and no queue: C-5 counts
+# long-running processes and new datastores at 4x a domain-code cost, and the
+# decision was that neither earns its keep. See DECISIONS.md 2026-10-05.
+#
+# PORTS are deliberately offset into the 5xxxx range so this stack can run
+# alongside any other local project without a port collision.
+# =============================================================================
+
+services:
+  # ---------------------------------------------------------------------------
+  # PostgreSQL 18 — matches the production target (C-4)
+  #
+  # VOLUME GOTCHA: PG18 Alpine requires PGDATA=/var/lib/postgresql/pgdata with
+  # the volume at /var/lib/postgresql, NOT /var/lib/postgresql/data. Mount it at
+  # the old path and Postgres restart-loops on every start.
+  # ---------------------------------------------------------------------------
+  postgres:
+    image: postgres:18-alpine
+    container_name: upvvan-pg
+    restart: unless-stopped
+    ports:
+      - '55432:5432'
+    environment:
+      POSTGRES_USER: upvvan
+      POSTGRES_PASSWORD: upvvan_dev
+      POSTGRES_DB: upvvan
+      PGDATA: /var/lib/postgresql/pgdata
+    volumes:
+      - pgdata:/var/lib/postgresql
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U upvvan -d upvvan']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    logging:
+      driver: 'json-file'
+      options:
+        max-size: '10m'
+        max-file: '3'
+
+  # ---------------------------------------------------------------------------
+  # Object storage (local replacement for S3/R2)
+  # API:          http://localhost:59000  (S3 endpoint)
+  # Console:      http://localhost:59001  (web UI — minioadmin/minioadmin)
+  # Bucket:       upvvan-media
+  #
+  # RUSTFS, NOT MINIO. The minio/minio and minio/mc images were deleted from
+  # Docker Hub outright and cannot be fetched at all — a compose file that
+  # references them fails to build, not merely to start. RustFS is a maintained,
+  # S3-API-compatible drop-in. The app reaches storage purely through the S3_*
+  # env vars, never by image name, so it needs no change.
+  #
+  # CAVEAT: RustFS does NOT auto-create buckets on first write. Writes fail with
+  # NoSuchBucket until the bucket exists. `make storage-bucket` creates it.
+  # ===========================================================================
+  rustfs:
+    image: rustfs/rustfs:latest
+    container_name: upvvan-rustfs
+    restart: unless-stopped
+    ports:
+      - '59000:9000' # S3 API
+      - '59001:9001' # Web console
+    environment:
+      RUSTFS_ACCESS_KEY: minioadmin
+      RUSTFS_SECRET_KEY: minioadmin
+      RUSTFS_ROOT_USER: minioadmin
+      RUSTFS_ROOT_PASSWORD: minioadmin
+    command: /data
+    volumes:
+      - rustfsdata:/data
+    healthcheck:
+      test: ['CMD', 'curl', '-f', 'http://localhost:9000/health']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    logging:
+      driver: 'json-file'
+      options:
+        max-size: '10m'
+        max-file: '3'
+
+  # ---------------------------------------------------------------------------
+  # Mailpit — SMTP test server. Order status + claim notification emails.
+  # SMTP:   http://localhost:51025
+  # Web UI: http://localhost:58025
+  # ===========================================================================
+  mailpit:
+    image: axllent/mailpit:latest
+    container_name: upvvan-mailpit
+    restart: unless-stopped
+    ports:
+      - '51025:1025'
+      - '58025:8025'
+    logging:
+      driver: 'json-file'
+      options:
+        max-size: '10m'
+        max-file: '3'
+
+  # ---------------------------------------------------------------------------
+  # Adminer — database UI.
+  # URL: http://localhost:58080
+  # Connect to: host=localhost, port=55432, db=upvvan, user=upvvan, pass=upvvan_dev
+  #
+  # Worth having for this project specifically: the Phase 0 proof that our
+  # business invariants are enforced by the DATABASE and not only by application
+  # code means deliberately attempting illegal direct writes. Adminer is the
+  # fastest way to do that by hand.
+  # ===========================================================================
+  adminer:
+    image: adminer:latest
+    container_name: upvvan-adminer
+    restart: unless-stopped
+    ports:
+      - '58080:8080'
+    depends_on:
+      postgres:
+        condition: service_healthy
+    logging:
+      driver: 'json-file'
+      options:
+        max-size: '10m'
+        max-file: '3'
+
+volumes:
+  pgdata:
+    name: upvvan-pgdata
+  rustfsdata:
+    name: upvvan-rustfsdata

@@ -1,0 +1,14 @@
+node_modules
+.next
+.turbo
+coverage
+test-results
+playwright-report
+pnpm-lock.yaml
+src/payload-types.ts
+src/payload-generated-schema.ts
+src/app/theme.css
+.env
+.env.local
+.DS_Store
+trash

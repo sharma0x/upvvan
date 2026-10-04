@@ -1,0 +1,68 @@
+@import 'tailwindcss';
+
+/*
+ * Design tokens.
+ *
+ * GENERATED — do not hand-edit.
+ *   Source of truth: DESIGN.md
+ *   Regenerate:      npx @google/design.md export --format css-tailwind DESIGN.md > src/app/theme.css
+ *   Verify:          npx @google/design.md lint DESIGN.md   (0 errors, 0 warnings)
+ *
+ * DESIGN.md is the normative spec — tokens plus the reasoning for why each value
+ * exists. This file is its Tailwind v4 projection. Editing a value here means the
+ * next export silently reverts it.
+ *
+ * ── WHY postcss.config.mjs IS LOAD-BEARING ────────────────────────────────
+ * `@theme` and `@import 'tailwindcss'` are Tailwind v4 directives, not plain CSS.
+ * They are only processed when `@tailwindcss/postcss` is wired into PostCSS.
+ *
+ * Without that config they are emitted LITERALLY into the stylesheet, the custom
+ * properties are never defined, and every `var(--color-*)` in the app silently
+ * resolves to nothing: no borders, no backgrounds, no brand colour. The page
+ * rendered completely unstyled while typecheck, the full unit suite, the
+ * production build and every DOM assertion passed.
+ *
+ * That happened, and it was caught by looking at a screenshot rather than by a
+ * test. If styles ever go missing, check this file before suspecting components.
+ *
+ * Design rules (see DESIGN.md): OKLCH throughout, neutrals tinted toward the
+ * brand hue rather than pure gray, no pure black/white, no gradient text, no
+ * `border-left` accent stripe thicker than 1px.
+ */
+@import './theme.css';
+
+@layer base {
+  *,
+  *::before,
+  *::after {
+    border-color: var(--color-border);
+  }
+
+  body {
+    background-color: var(--color-surface);
+    color: var(--color-ink);
+    font-family: var(--font-body-md);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  h1 {
+    font-family: var(--font-h1);
+    font-size: var(--text-h1);
+    font-weight: var(--font-weight-h1);
+    letter-spacing: var(--tracking-h1);
+    line-height: 1.2;
+  }
+
+  /*
+   * Visible keyboard focus on everything interactive.
+   *
+   * A customer may be on a phone with a keyboard or switch device attached, and
+   * Tailwind's default ring is near-invisible against these tinted surfaces.
+   * Coverage is the one screen where an unreachable focus ring makes the form
+   * unusable.
+   */
+  :focus-visible {
+    outline: 2px solid var(--color-primary);
+    outline-offset: 2px;
+  }
+}

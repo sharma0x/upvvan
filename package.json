@@ -1,0 +1,87 @@
+{
+  "name": "upvvan",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "next dev --webpack",
+    "build": "payload generate:types && next build --webpack",
+    "start": "next start",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "payload": "payload",
+    "generate:types": "payload generate:types",
+    "migrate": "payload migrate",
+    "migrate:create": "payload migrate:create",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "test:e2e": "playwright test",
+    "test:e2e:install": "playwright install chromium",
+    "test:all": "pnpm test && pnpm test:e2e",
+    "seed": "node --env-file=.env --import tsx/esm scripts/seed.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@payloadcms/db-postgres": "3.86.0",
+    "@payloadcms/email-nodemailer": "3.86.0",
+    "@payloadcms/next": "3.86.0",
+    "@payloadcms/richtext-lexical": "3.86.0",
+    "@payloadcms/storage-s3": "3.86.0",
+    "@payloadcms/ui": "3.86.0",
+    "better-auth": "^1.7.5",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "lucide-react": "^0.511.0",
+    "next": "^16.1.1",
+    "payload": "3.86.0",
+    "pg": "^8.22.0",
+    "react": "^19.2.1",
+    "react-dom": "^19.2.1",
+    "server-only": "^0.0.1",
+    "sharp": "^0.34.5",
+    "tailwind-merge": "^3.6.0",
+    "tailwindcss": "^4.1.18"
+  },
+  "devDependencies": {
+    "@better-auth/cli": "^1.4.21",
+    "@eslint/eslintrc": "^3.3.7",
+    "@next/eslint-plugin-next": "^16.3.8",
+    "@playwright/test": "^1.61.0",
+    "@tailwindcss/postcss": "^4.1.18",
+    "@types/node": "^22.15.21",
+    "@types/pg": "^8.20.0",
+    "@types/react": "^19.2.1",
+    "@types/react-dom": "^19.2.1",
+    "@typescript-eslint/eslint-plugin": "^8",
+    "@typescript-eslint/parser": "^8",
+    "eslint": "^9.39.4",
+    "eslint-config-next": "^16.2.9",
+    "happy-dom": "^20.10.6",
+    "jsdom": "^29.1.1",
+    "prettier": "^3.6.2",
+    "prettier-plugin-tailwindcss": "^0.6.14",
+    "tsx": "4.21.0",
+    "typescript": "^5.8.3",
+    "vitest": "^4.1.9"
+  },
+  "engines": {
+    "node": ">=20.9.0"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "esbuild",
+      "sharp"
+    ],
+    "overrides": {
+      "tsx": "4.21.0"
+    }
+  },
+  "lint-staged": {
+    "*.{ts,tsx,js,jsx,json,md,css}": [
+      "prettier --write"
+    ]
+  },
+  "packageManager": "pnpm@10.1.0"
+}
