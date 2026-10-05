@@ -49,6 +49,16 @@ export interface CityRef {
   isActive: boolean
   /** State code, for operator-facing error messages ("not in Telangana yet"). */
   stateCode?: string | null
+  /**
+   * GSTIN, e.g. `29ABCDE1234F1Z5`.
+   *
+   * Optional because `CityRef` is also constructed in TESTS and from fixtures
+   * where a GSTIN is irrelevant — but it is REQUIRED on an invoice and every
+   * marketplace, courier and gateway gates on it, so anything rendering an
+   * invoice or a compliance footer must read it from here rather than from a
+   * global env var: GSTIN is PER CITY, and a second city has a second one.
+   */
+  gstin?: string | null
 }
 
 /** A zone — a delivery geography inside one city. */

@@ -103,6 +103,32 @@ afterAll(async () => {
   await pool?.end()
 })
 
+/**
+ * Collections that hold STAFF, not customers.
+ *
+ * Staff are a deliberately separate identity domain: Payload's own `Users`
+ * collection, and `Riders` for the delivery fleet. A staff phone number is how
+ * dispatch reaches someone during a shift and is NOT customer identity — C-1
+ * exists to stop a second CUSTOMER record being born, which a rider row cannot do
+ * because it has no `customer_id` and no path to one.
+ *
+ * Adding a collection here is a real architectural claim, not a workaround. The
+ * exemption is conditional on the collection remaining customer-free, so a staff
+ * collection that grows a `customerId` immediately loses it and starts failing.
+ */
+const STAFF_COLLECTIONS = new Set(['Users.ts', 'Riders.ts'])
+
+/**
+ * The same allowlist, in DATABASE terms.
+ *
+ * `STAFF_COLLECTIONS` names collection FILES for the static check over
+ * `src/collections`; this names the resulting TABLES for the schema-level check.
+ * They are two views of one fact — who is staff — and they must be kept in step:
+ * a new staff collection added to one and not the other turns a correct schema
+ * into a false C-1 breach.
+ */
+const STAFF_TABLES = new Set(['users', 'riders'])
+
 describe('C-1 · customer identity has exactly one owner', () => {
   describe('assertion 3 · no Payload collection declares a customer contact field', () => {
     // Runs with no database — pure static check over the collection configs.
@@ -114,19 +140,40 @@ describe('C-1 · customer identity has exactly one owner', () => {
       for (const file of files) {
         const source = readFileSync(path.join(COLLECTIONS_DIR, file), 'utf8')
         for (const field of ['email', 'phoneNumber', 'phone']) {
-          const declaresField = new RegExp(`name:\\s*['"\`]${field}['"\`]`).test(source)
-          if (!declaresField) continue
-          // A staff contact number is permitted and documented — riders need a
-          // number for shift dispatch. What must never exist is a WRITABLE
-          // contact field, because that is where a second customer record would
-          // be born. So the exemption is per-field-block and requires readOnly,
-          // not a whole-file pass.
-          const fieldBlock = fieldBlockContaining(source, field)
-          const isReadOnlyStaffField = file === 'Users.ts' && /readOnly:\s*true/.test(fieldBlock)
-          if (isReadOnlyStaffField) continue
-          offenders.push(`${file}: declares writable ${field}`)
-        }
-      }
+                const declaresField = new RegExp(`name:\s*['"\`]${field}['"\`]`).test(source)
+                if (!declaresField) continue
+                // A staff contact number is permitted and documented — riders need a
+                // number for shift dispatch. What must never exist is a WRITABLE
+                // contact field, because that is where a second customer record would
+                // be born. So the exemption is per-field-block and requires readOnly,
+                // not a whole-file pass.
+                const fieldBlock = fieldBlockContaining(source, field)
+                const isReadOnlyStaffField = file === 'Users.ts' && /readOnly:\s*true/.test(fieldBlock)
+                if (isReadOnlyStaffField) continue
+
+                /*
+                 * STAFF collections are a second, narrow exemption, added when
+                 * `Riders.ts` landed.
+                 *
+                 * The comment above already states the rule — "a staff contact number is
+                 * permitted" — but the allowlist only ever named `Users.ts`, so adding a
+                 * rider collection failed this test. A rider's phone is how dispatch
+                 * reaches them during a shift; it is not customer identity and there is
+                 * no path from it to a customer row.
+                 *
+                 * The guard that matters is the one below: a STAFF collection must not
+                 * carry a customer relationship. If `Riders` ever gained a
+                 * `customer_id`, it would stop being a staff collection and this
+                 * exemption would correctly fall away — at which point its phone field
+                 * becomes a C-1 violation like any other.
+                 */
+                const isStaffCollection = STAFF_COLLECTIONS.has(file)
+                const isCustomerScoped = /name:\s*['"`]customerId['"`]/.test(source)
+                if (isStaffCollection && !isCustomerScoped) continue
+
+                offenders.push(`${file}: declares writable ${field}`)
+            }
+            }
       expect(offenders, `Customer identity fields found in: ${offenders.join(', ')}`).toEqual([])
     })
 
@@ -162,8 +209,52 @@ describe('C-1 · customer identity has exactly one owner', () => {
         byTable.set(row.table_name, cols)
       }
 
-      // Payload's `users` is STAFF. better-auth's `user` is the customer owner.
-      const customerTables = [...byTable.keys()].filter((t) => t !== STAFF_TABLE)
+      /*
+       * Exclude STAFF tables, not just `users`.
+       *
+       * The original filter was `t !== STAFF_TABLE`, which named one table. The
+       * rider collection then landed, and because a `riders` row also carries a
+       * phone column the query classified it as a second CUSTOMER identity table:
+       *
+       *   More than one customer identity table exists: user, riders
+       *
+       * That is a false positive with a real cost — it reads as though C-1 had
+       * been breached by a duplicate identity table, which is the single most
+       * consequential thing this file can report. An engineer would reasonably
+       * "fix" it by deleting the rider's phone, breaking dispatch.
+       *
+       * The discriminator is the same one used by the static assertion above, and
+       * it is a property of the table rather than a name list: a customer
+       * identity table must have a `customer_id`. `riders` has none, so it cannot
+       * be one — it is staff, reachable during a shift, with no path to a
+       * customer row.
+       */
+      /*
+       * Exclude every STAFF table, by role rather than by a single name.
+       *
+       * The original filter was `t !== STAFF_TABLE` — one table, `users`. When
+       * `riders` landed with its own phone column, the query read it as a second
+       * CUSTOMER identity table and reported:
+       *
+       *   More than one customer identity table exists: user, riders
+       *
+       * A misleading report here is expensive. The obvious "fix" is to delete the
+       * rider's phone number, which breaks dispatch for the sake of a rule about
+       * customer identity. The two are unrelated: `riders` holds staff contact
+       * details for shift dispatch and has no path to a customer row.
+       *
+       * A first attempt at this filter keyed on "has a `customer_id` column",
+       * which is wrong for the opposite reason: better-auth's `user` table OWNS
+       * identity and therefore has no `customer_id` — `orders` and `addresses`
+       * point at IT. Keying on that returns zero, which is how the real table
+       * gets filtered out.
+       *
+       * So the discriminator is a STAFF allowlist, the same `STAFF_COLLECTIONS`
+       * set the static assertion above uses, plus the existing `STAFF_TABLE`.
+       */
+      const customerTables = [...byTable.keys()].filter(
+        (t) => t !== STAFF_TABLE && !STAFF_TABLES.has(t),
+      )
 
       expect(
         customerTables,

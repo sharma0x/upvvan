@@ -18,6 +18,15 @@ import type { NextConfig } from 'next'
 const nextConfig: NextConfig = {
   reactStrictMode: true,
   outputFileTracingRoot: import.meta.dirname,
+  images: {
+    /*
+     * `sharp` is already a dependency (Payload needs it for its own image
+     * processing) and the catalogue art in `public/images/plants` is local, so
+     * there is no remote host to allow. This block exists to pin the formats:
+     * AVIF to modern browsers, WebP to everything else.
+     */
+    formats: ['image/avif', 'image/webp'],
+  },
 }
 
 export default withPayload(nextConfig, { devBundleServerPackages: false })

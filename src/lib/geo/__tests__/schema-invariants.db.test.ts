@@ -60,146 +60,215 @@ afterAll(async () => {
   pool = null
 })
 
-/** Create a city the test owns, so real data is never touched. */
-async function makeCityForTest(slug: string): Promise<number> {
-  const rows = await exec<{ id: number }>(
-    `INSERT INTO cities (name, slug, state, status, is_active, licence_status, updated_at, created_at)
-     VALUES ($1, $2, 'Karnataka', 'pending', false, 'not_filed', now(), now())
-     RETURNING id`,
-    [slug, slug],
-  )
-  return rows[0]!.id
+/**
+ * Insert a band's worth of rows for a test city inside ONE transaction.
+ *
+ * `trg_bands_need_tiers` is DEFERRABLE INITIALLY DEFERRED, so it is checked at
+ * COMMIT — not per statement. That is deliberate: a city is configured by adding
+ * bands one at a time, and a per-statement check would refuse every intermediate
+ * state. But it means a test that inserts bands with separate autocommitted
+ * statements trips the trigger after the FIRST band, while the city still has
+ * only one.
+ *
+ * So the band tests configure the city inside a single transaction and force the
+ * constraint explicitly. This is a test-harness concern only — the product
+ * behaviour (validate at commit, not per statement) is exactly right.
+ */
+/** Run one statement inside its own SAVEPOINT so a rejection does not poison the transaction. */
+async function savepoint<T>(
+  client: import('pg').PoolClient,
+  fn: () => Promise<T>,
+): Promise<T> {
+  await client.query('SAVEPOINT sp')
+  try {
+    const result = await fn()
+    await client.query('RELEASE SAVEPOINT sp')
+    return result
+  } catch (err) {
+    await client.query('ROLLBACK TO SAVEPOINT sp').catch(() => {})
+    throw err
+  }
 }
 
-/** Remove a city and everything hanging off it. */
-async function dropCity(cityId: number): Promise<void> {
-  await exec(`DELETE FROM delivery_bands WHERE city_id = $1`, [cityId])
-  await exec(`DELETE FROM zones WHERE city_id = $1`, [cityId])
-  await exec(`DELETE FROM pincodes WHERE city_id = $1`, [cityId])
-  await exec(`DELETE FROM price_books WHERE city_id = $1`, [cityId])
-  await exec(`DELETE FROM cities WHERE id = $1`, [cityId])
+async function withBandTransaction<T>(
+  fn: (client: import('pg').PoolClient, cityId: number) => Promise<T>,
+  slug: string,
+): Promise<T> {
+  /*
+   * A rejected statement poisons the whole transaction in Postgres: every later
+   * command returns "current transaction is aborted" until ROLLBACK. Several of
+   * these tests deliberately make an illegal write and then keep asserting, so
+   * they need a SAVEPOINT around each one — otherwise the second assertion fails
+   * with the wrong error and the test passes or fails for the wrong reason.
+   */
+  void 0
+  const client = await pool!.connect()
+  try {
+    await client.query('BEGIN')
+    const { rows } = await client.query<{ id: number }>(
+      `INSERT INTO cities (name, slug, state, status, is_active, licence_status,
+                           licence_number, licence_approved_at, tax_rate_bp, updated_at, created_at)
+       VALUES ($1, $2, 'Karnataka', 'pending', false, 'not_filed', 'TEST-LIC', now(), 1800, now(), now())
+       RETURNING id`,
+      [slug, slug],
+    )
+    const cityId = rows[0]!.id
+    try {
+      const result = await fn(client, cityId)
+      await client.query('SET CONSTRAINTS ALL IMMEDIATE')
+      await client.query('ROLLBACK')
+      return result
+    } catch (err) {
+      await client.query('ROLLBACK').catch(() => {})
+      throw err
+    }
+  } finally {
+    client.release()
+  }
 }
 
 describe('schema-layer invariants — proven by ILLEGAL DIRECT WRITES', () => {
   describe('INVARIANT 1 · rider pay must increase with distance', () => {
     it('a valid monotonic band set inserts successfully', async () => {
       if (!connected) return
-      const cityId = await makeCityForTest('bands-ok')
-      try {
-        for (const b of [
-          { code: 'A', min: 0, max: 3, pay: 4500 },
-          { code: 'B', min: 3, max: 7, pay: 6000 },
-          { code: 'C', min: 7, max: 12, pay: 7500 },
-        ]) {
-          await exec(
-            `INSERT INTO delivery_bands (code, label, min_km, max_km, pay_paise, city_id, updated_at, created_at)
-             VALUES ($1,$2,$3,$4,$5,$6, now(), now())`,
-            [b.code, `Band ${b.code}`, b.min, b.max, b.pay, cityId],
+      await withBandTransaction(
+        async (client, cityId) => {
+          for (const b of [
+            { code: 'A', min: 0, max: 3, pay: 4500 },
+            { code: 'B', min: 3, max: 7, pay: 6000 },
+            { code: 'C', min: 7, max: 12, pay: 7500 },
+          ]) {
+            await client.query(
+              `INSERT INTO delivery_bands (code, label, min_km, max_km, pay_paise, city_id, updated_at, created_at)
+               VALUES ($1,$2,$3,$4,$5,$6, now(), now())`,
+              [b.code, `Band ${b.code}`, b.min, b.max, b.pay, cityId],
+            )
+          }
+          const { rows } = await client.query<{ count: number }>(
+            `SELECT COUNT(*)::int AS count FROM delivery_bands WHERE city_id = $1`,
+            [cityId],
           )
-        }
-        const rows = await exec<{ count: number }>(
-          `SELECT COUNT(*)::int AS count FROM delivery_bands WHERE city_id = $1`,
-          [cityId],
-        )
-        expect(rows[0]!.count).toBe(3)
-      } finally {
-        await dropCity(cityId)
-      }
+          expect(rows[0]!.count).toBe(3)
+        },
+        'bands-ok',
+      )
     })
 
     it('REJECTS a direct insert where a LONGER band pays LESS', async () => {
       if (!connected) return
-      const cityId = await makeCityForTest('bands-inverted')
-      try {
-        await exec(
-          `INSERT INTO delivery_bands (code,label,min_km,max_km,pay_paise,city_id,updated_at,created_at)
-           VALUES ('A','Band A',0,3,4500,$1, now(), now())`,
-          [cityId],
-        )
-        // Bypassing every application hook. Only the DB can stop this.
-        await expect(
-          exec(
-            `INSERT INTO delivery_bands (code,label,min_km,max_km,pay_paise,city_id,updated_at,created_at)
-             VALUES ('B','Band B',3,7,1000,$1, now(), now())`,
-            [cityId],
-          ),
-        ).rejects.toThrow(/NOT more than|Longer routes must pay strictly more/i)
-      } finally {
-        await dropCity(cityId)
-      }
+      await expect(
+        withBandTransaction(
+          async (client, cityId) => {
+            await client.query(
+              `INSERT INTO delivery_bands (code,label,min_km,max_km,pay_paise,city_id,updated_at,created_at)
+               VALUES ('A','Band A',0,3,4500,$1, now(), now())`,
+              [cityId],
+            )
+            // Bypassing every application hook. Only the DB can stop this.
+            // SAVEPOINT so the rejection surfaces here rather than aborting the
+            // transaction and masking the message with "transaction is aborted".
+            await savepoint(client, () =>
+              client.query(
+                `INSERT INTO delivery_bands (code,label,min_km,max_km,pay_paise,city_id,updated_at,created_at)
+                 VALUES ('B','Band B',3,7,1000,$1, now(), now())`,
+                [cityId],
+              ),
+            )
+          },
+          'bands-inverted',
+        ),
+      ).rejects.toThrow(/NOT more than|Longer routes must pay strictly more/i)
     })
 
     it('REJECTS a direct UPDATE that inverts the incentive', async () => {
       if (!connected) return
-      const cityId = await makeCityForTest('bands-update')
-      try {
-        // Capture BOTH ids so the attack targets the far band, not the near one.
-        const near = await exec<{ id: number }>(
-          `INSERT INTO delivery_bands (code,label,min_km,max_km,pay_paise,city_id,updated_at,created_at)
-           VALUES ('A','Band A',0,3,4500,$1, now(), now()) RETURNING id`,
-          [cityId],
-        )
-        const far = await exec<{ id: number }>(
-          `INSERT INTO delivery_bands (code,label,min_km,max_km,pay_paise,city_id,updated_at,created_at)
-           VALUES ('B','Band B',3,7,6000,$1, now(), now()) RETURNING id`,
-          [cityId],
-        )
+      await withBandTransaction(
+        async (client, cityId) => {
+          // Capture BOTH ids so the attack targets the far band, not the near one.
+          const near = await client.query<{ id: number }>(
+            `INSERT INTO delivery_bands (code,label,min_km,max_km,pay_paise,city_id,updated_at,created_at)
+             VALUES ('A','Band A',0,3,4500,$1, now(), now()) RETURNING id`,
+            [cityId],
+          )
+          const far = await client.query<{ id: number }>(
+            `INSERT INTO delivery_bands (code,label,min_km,max_km,pay_paise,city_id,updated_at,created_at)
+             VALUES ('B','Band B',3,7,6000,$1, now(), now()) RETURNING id`,
+            [cityId],
+          )
 
-        // The exact attack: drag the FAR band down to the near band's pay. This
-        // is a single UPDATE on one row, bypassing every application hook. Only
-        // the DB trigger can refuse it.
-        await expect(
-          exec(`UPDATE delivery_bands SET pay_paise = 4500 WHERE id = $1`, [far[0]!.id]),
-        ).rejects.toThrow(/NOT less than|Longer routes must pay strictly more/i)
+          // The exact attack: drag the FAR band down to the near band's pay. This
+          // is a single UPDATE on one row, bypassing every application hook. Only
+          // the DB trigger can refuse it.
+          await expect(
+            savepoint(client, () =>
+              client.query(`UPDATE delivery_bands SET pay_paise = 4500 WHERE id = $1`, [
+                far.rows[0]!.id,
+              ]),
+            ),
+          ).rejects.toThrow(/NOT less than|Longer routes must pay strictly more/i)
 
-        // And the near band dragged UP past the far one is the same defect.
-        await expect(
-          exec(`UPDATE delivery_bands SET pay_paise = 9000 WHERE id = $1`, [near[0]!.id]),
-        ).rejects.toThrow(/NOT more than|Longer routes must pay strictly more/i)
+          // And the near band dragged UP past the far one is the same defect.
+          await expect(
+            savepoint(client, () =>
+              client.query(`UPDATE delivery_bands SET pay_paise = 9000 WHERE id = $1`, [
+                near.rows[0]!.id,
+              ]),
+            ),
+          ).rejects.toThrow(/NOT more than|Longer routes must pay strictly more/i)
 
-        // Sanity: the legal update still works, so the trigger is not simply
-        // rejecting everything.
-        await exec(`UPDATE delivery_bands SET pay_paise = 7000 WHERE id = $1`, [far[0]!.id])
-      } finally {
-        await dropCity(cityId)
-      }
+          // Sanity: the legal update still works, so the trigger is not simply
+          // rejecting everything.
+          await client.query(`UPDATE delivery_bands SET pay_paise = 7000 WHERE id = $1`, [
+            far.rows[0]!.id,
+          ])
+        },
+        'bands-update',
+      )
     })
 
     it('REJECTS overlapping bands', async () => {
       if (!connected) return
-      const cityId = await makeCityForTest('bands-overlap')
-      try {
-        await exec(
-          `INSERT INTO delivery_bands (code,label,min_km,max_km,pay_paise,city_id,updated_at,created_at)
-           VALUES ('A','Band A',0,4,4500,$1, now(), now())`,
-          [cityId],
-        )
-        await expect(
-          exec(
-            `INSERT INTO delivery_bands (code,label,min_km,max_km,pay_paise,city_id,updated_at,created_at)
-             VALUES ('B','Band B',3,7,6000,$1, now(), now())`,
-            [cityId],
-          ),
-        ).rejects.toThrow(/overlaps/i)
-      } finally {
-        await dropCity(cityId)
-      }
+      await expect(
+        withBandTransaction(
+          async (client, cityId) => {
+            await client.query(
+              `INSERT INTO delivery_bands (code,label,min_km,max_km,pay_paise,city_id,updated_at,created_at)
+               VALUES ('A','Band A',0,4,4500,$1, now(), now())`,
+              [cityId],
+            )
+            await savepoint(client, () =>
+              client.query(
+                `INSERT INTO delivery_bands (code,label,min_km,max_km,pay_paise,city_id,updated_at,created_at)
+                 VALUES ('B','Band B',3,7,6000,$1, now(), now())`,
+                [cityId],
+              ),
+            )
+          },
+          'bands-overlap',
+        ),
+      ).rejects.toThrow(/overlaps/i)
     })
 
     it('REJECTS a fractional pay value', async () => {
       if (!connected) return
-      const cityId = await makeCityForTest('bands-float')
-      try {
-        await expect(
-          exec(
-            `INSERT INTO delivery_bands (code,label,min_km,max_km,pay_paise,city_id,updated_at,created_at)
-             VALUES ('A','Band A',0,3,4500.5,$1, now(), now())`,
-            [cityId],
-          ),
-        ).rejects.toThrow()
-      } finally {
-        await dropCity(cityId)
-      }
+      // Also transactional, for the same reason as the others — but this one
+      // mattered more than a passing test: the old version created the city with
+      // a separate autocommitted statement, and because the rejected INSERT
+      // poisoned nothing (it was its own statement) the city was left behind on
+      // disk. The next run then failed on `cities_slug_idx`. A test that leaves
+      // fixtures in the database is a test that breaks the next run.
+      await expect(
+        withBandTransaction(
+          async (client, cityId) => {
+            await client.query(
+              `INSERT INTO delivery_bands (code,label,min_km,max_km,pay_paise,city_id,updated_at,created_at)
+               VALUES ('A','Band A',0,3,4500.5,$1, now(), now())`,
+              [cityId],
+            )
+          },
+          'bands-float',
+        ),
+      ).rejects.toThrow()
     })
   })
 

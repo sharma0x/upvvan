@@ -107,6 +107,33 @@ make design-export   # Regenerate src/app/theme.css from DESIGN.md
 - `sendOTP` / `sendVerificationCode` are **top-level plugin options**, and the
   callback receives `{ phoneNumber, code }` — not `{ number, code }`.
 
+**Payload array fields (raw SQL into them)**
+
+An `array` field on a collection generates a **separate table with three surprises**,
+all of which cost a round trip and a 500 to find:
+
+- **The table is named after the PARENT slug pluralised, not the field name.** An
+  `items` array on `Orders` becomes **`orders_items`**, not `order_items`.
+- **There are no `updated_at` / `created_at` columns.** `timestamps` applies to the
+  parent collection only. Inserting them fails with `column "updated_at" ... does
+not exist`.
+- **`id` is a `varchar` PRIMARY KEY with no default.** Payload generates it in
+  application code, so a raw `INSERT` must supply one or it fails with
+  `null value in column "id" ... violates not-null constraint`.
+
+Declare the field on the collection and let Payload own the table. The reason to
+reach for raw SQL here at all is that we want a single transaction spanning the
+order and its lines — but that does not mean guessing the schema.
+
+**Errors must never reach a customer**
+
+Returning `err.message` from a route handler leaks Postgres internals to the
+storefront. This actually happened: a missing array table surfaced to a customer
+as `relation "order_items" does not exist`. Catch business-rule violations by
+matching their own wording (those messages _are_ the customer-facing copy), log
+everything else with `console.error`, and return a generic message plus a 500.
+An error-message allowlist is a real control, not a nicety.
+
 **CSS / build**
 
 - **`@theme` and `@import 'tailwindcss'` are directives, not plain CSS.** They are
@@ -133,8 +160,16 @@ make design-export   # Regenerate src/app/theme.css from DESIGN.md
 
 ## Types that cross boundaries
 
-Postgres integer PKs come back from `json_agg` as **numbers**; Payload
-relationship values and route params are **strings**. Comparing with `===`
+Postgres `numeric` columns come back from the `pg` driver as **strings**, not
+numbers — the driver is being faithful to the column type. This bites money
+specifically: `base_price_paise: 19900` arrives as `'19900'`, and `formatPaise`
+then does `Number.isInteger(n)` on a string and returns `false`, so the price
+renders blank. Coerce at the loader boundary with an assertion that refuses
+non-integral values, rather than letting a string coerce silently somewhere
+deeper — that silent coercion is how a float eventually reaches a paise column.
+
+Payload relationship values and route params are **strings** while `json_agg`
+returns **numbers**. Comparing with `===`
 silently reports a mismatch — which, for the city gate, tells a customer in our own
 city that we do not deliver to them. Use `sameId()` in `serviceability.ts`. There
 is a regression test that mixes types on purpose; do not "simplify" its fixtures
@@ -147,3 +182,13 @@ into consistency.
 - DB-layer proofs attempt **illegal raw SQL** that bypasses all application code.
   If a constraint only exists in TypeScript, those writes succeed and the test
   fails. That is the point.
+
+<!-- BEGIN:nextjs-agent-rules -->
+
+# This is NOT the Next.js you know
+
+This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` (resolved from this file's directory; in monorepos the `next` package may not be visible from the repo root) before writing any code. Heed deprecation notices.
+
+This block is written and re-added by `next dev` — verify at `node_modules/next/dist/server/lib/generate-agent-files.js`. Removing it from a diff only re-creates the uncommitted change; committing it with your work keeps the tree clean.
+
+<!-- END:nextjs-agent-rules -->

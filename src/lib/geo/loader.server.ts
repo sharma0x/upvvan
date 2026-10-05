@@ -61,7 +61,36 @@ let pool: import('pg').Pool | null = null
 async function getPool(): Promise<import('pg').Pool> {
   if (!pool) {
     const { Pool } = await import('pg')
-    pool = new Pool({ connectionString: appConfig.database.url })
+    /*
+     * The pool is sized for a single-user dev machine, which is far too small for
+     * a real request burst — and the shortfall does not fail loudly. When every
+     * connection is checked out, `pg` QUEUES rather than rejects, so the request
+     * waits, and if the wait exceeds the caller's own timeout the error surfaces as
+     * a generic failure some way downstream of the pool.
+     *
+     * That downstream path was a 404. `loadCatalogue` throws on a query error, the
+     * PDP has no try/catch, and `notFound()` fires — so a transient connection
+     * problem presented to a customer as "this plant does not exist". Measured at
+     * 6 of 27 requests during a database-backed test run; a real site under
+     * traffic would do the same, and the symptom is a product that looks like it
+     * has no stock.
+     *
+     * `max` is raised and the failure made explicit. 20 is comfortable for a
+     * single Postgres 18 container and still bounded.
+     */
+    pool = new Pool({
+      connectionString: appConfig.database.url,
+      max: 20,
+      // Do not sit on a dead connection waiting for TCP to notice.
+      connectionTimeoutMillis: 5_000,
+      idleTimeoutMillis: 10_000,
+    })
+    // An idle-client error (server restart, network blip) must not take the
+    // process down. Without a listener `pg` emits an unhandled 'error' event and
+    // Node exits — which is a total outage from one dropped socket.
+    pool.on('error', (err) => {
+      console.error('[geo] idle postgres client errored:', err.message)
+    })
   }
   return pool
 }
@@ -73,7 +102,7 @@ export async function loadGeo(): Promise<LoadedGeo> {
     SELECT
       (SELECT json_agg(json_build_object(
                 'id', id, 'slug', slug, 'name', name,
-                'stateCode', state, 'isActive', COALESCE(is_active, false)
+                'stateCode', state, 'gstin', gstin, 'isActive', COALESCE(is_active, false)
               ))
          FROM cities)                                                    AS cities,
       (SELECT COALESCE(json_agg(json_build_object(

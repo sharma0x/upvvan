@@ -194,11 +194,31 @@ export const config = {
   },
 
   compliance: {
-    /** Named grievance officer — a mandatory E-Commerce Rules 2020 disclosure. */
-    grievanceOfficerName: str('GRIEVANCE_OFFICER_NAME', ''),
-    grievanceOfficerEmail: str('GRIEVANCE_OFFICER_EMAIL', ''),
+    /*
+     * Consumer Protection (E-Commerce) Rules 2020, r.4(2) and r.4(4).
+     *
+     * These were defined here and read by NOTHING — the compliance review found
+     * four documented keys wired to zero consumers, with blank env values, while
+     * `assertConfigValid` only checked DATABASE_URL. A compliance block nobody
+     * imports is a requirement that was written down and never met.
+     *
+     * Now: rendered by `SiteFooter`, and the boot-time check below refuses to
+     * start without them. The trade-off is deliberate — the app will not boot
+     * with an unconfigured grievance officer, which is exactly the state a
+     * launch-blocking disclosure gap looks like.
+     */
+    /** Legal name of the entity — r.4(2)(a). */
     legalEntityName: str('LEGAL_ENTITY_NAME', ''),
+    /** Principal geographic address of headquarters — r.4(2)(b). */
     principalAddress: str('PRINCIPAL_ADDRESS', ''),
+    /** Customer care e-mail and telephone — r.4(2)(d). */
+    customerCareEmail: str('CUSTOMER_CARE_EMAIL', ''),
+    customerCarePhone: str('CUSTOMER_CARE_PHONE', ''),
+    /** Grievance officer: name, designation and contact — r.4(4). */
+    grievanceOfficerName: str('GRIEVANCE_OFFICER_NAME', ''),
+    grievanceOfficerDesignation: str('GRIEVANCE_OFFICER_DESIGNATION', ''),
+    grievanceOfficerEmail: str('GRIEVANCE_OFFICER_EMAIL', ''),
+    grievanceOfficerPhone: str('GRIEVANCE_OFFICER_PHONE', ''),
   },
 
   features: {
@@ -218,6 +238,35 @@ export type AppConfig = typeof config
 export function assertConfigValid(): void {
   const missing: string[] = []
   if (!config.database.url) missing.push('DATABASE_URL')
+
+  /*
+   * Compliance disclosures are NOT optional in production.
+   *
+   * Consumer Protection (E-Commerce) Rules 2020 r.4(2) and r.4(4) require the
+   * legal entity name, principal address, customer-care contact, and a named
+   * grievance officer with a designation — all displayed accessibly on the
+   * platform. Failing fast here means the site cannot boot while quietly
+   * rendering an empty footer, which is precisely how this gap survived a
+   * review unnoticed.
+   *
+   * Skipped when ENABLE_E2E is on, so tests do not need a real officer.
+   */
+  if (!config.features.enableE2E) {
+    const required: Array<[keyof typeof config.compliance, string]> = [
+      ['legalEntityName', 'LEGAL_ENTITY_NAME'],
+      ['principalAddress', 'PRINCIPAL_ADDRESS'],
+      ['customerCareEmail', 'CUSTOMER_CARE_EMAIL'],
+      ['customerCarePhone', 'CUSTOMER_CARE_PHONE'],
+      ['grievanceOfficerName', 'GRIEVANCE_OFFICER_NAME'],
+      ['grievanceOfficerDesignation', 'GRIEVANCE_OFFICER_DESIGNATION'],
+      ['grievanceOfficerEmail', 'GRIEVANCE_OFFICER_EMAIL'],
+      ['grievanceOfficerPhone', 'GRIEVANCE_OFFICER_PHONE'],
+    ]
+    for (const [key, envName] of required) {
+      if (!config.compliance[key]) missing.push(envName)
+    }
+  }
+
   if (missing.length > 0) {
     throw new ConfigError(
       `Missing required configuration: ${missing.join(', ')}. Copy .env.example to .env.`,

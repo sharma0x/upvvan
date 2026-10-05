@@ -50,7 +50,22 @@
     font-size: var(--text-h1);
     font-weight: var(--font-weight-h1);
     letter-spacing: var(--tracking-h1);
-    line-height: 1.2;
+    line-height: 1.04;
+  }
+
+  /*
+   * h2 needed its own base rule for the same reason h1 did: the token existed in
+   * DESIGN.md but no selector consumed it, so every section heading silently fell
+   * back to the browser default — a bold system sans at 1.5em. That single missing
+   * rule was most of why the old catalogue looked like a document rather than a
+   * shop: the display voice stopped dead below the hero.
+   */
+  h2 {
+    font-family: var(--font-h2);
+    font-size: var(--text-h2);
+    font-weight: var(--font-weight-h2);
+    letter-spacing: var(--tracking-h2);
+    line-height: 1.15;
   }
 
   /*
@@ -64,5 +79,40 @@
   :focus-visible {
     outline: 2px solid var(--color-primary);
     outline-offset: 2px;
+  }
+
+  /*
+   * Minimum pointer-target size — WCAG 2.2 SC2.5.8 (Target Size, Minimum).
+   *
+   * This was measured, not assumed. A headless pass at 390px found inline links
+   * rendering 17–18px tall: an inline `<a>` is exactly the height of its text, so
+   * every footer phone number, every "How delivery works →" CTA and every inline
+   * breadcrumb sat under the 24px floor. On a phone held one-handed, while
+   * carrying a plant pot in the other, those are the links a thumb misses.
+   *
+   * Fixed at the base layer rather than by adding a class to each link, because
+   * the failure is invisible in the markup: there is nothing in the JSX that says
+   * "this is too small to tap". Enforcing it once means a link added later is
+   * correct by default, and the e2e suite (tests/e2e/a11y.mjs) fails if anyone
+   * opts out with an explicit smaller value.
+   *
+   * `min-height` on an INLINE element does not grow its line box, so links are
+   * made `inline-flex` — that is what actually enlarges the hit area. Buttons are
+   * already flex/grid items and are unaffected.
+   *
+   * 24px is the accessibility floor. Apple HIG and Material both ask for 44px,
+   * which is why the header and footer links carry an explicit 44px on top of
+   * this baseline.
+   */
+  a[href],
+  button,
+  input,
+  select {
+    min-height: 24px;
+  }
+
+  a[href] {
+    display: inline-flex;
+    align-items: center;
   }
 }

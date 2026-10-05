@@ -1,3 +1,11 @@
-// No DOM matchers needed yet — Phase 0 domain tests are pure Node.
-// Kept as a hook point so component tests get jest-dom matchers when they arrive.
+/**
+ * Vitest setup.
+ *
+ * Intentionally minimal. It used to stash Node's `fetch` for the link-integrity
+ * suite, but `setupFiles` run AFTER happy-dom installs its DOM stub, so the
+ * stashed value was the stub and the suite silently verified nothing. That suite
+ * now imports `undici` directly, which nothing stubs.
+ *
+ * Kept as a hook point for component tests that need jest-dom matchers.
+ */
 export {}

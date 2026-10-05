@@ -13,6 +13,14 @@ import { Zones } from '@/collections/Zones'
 import { DeliveryBands } from '@/collections/DeliveryBands'
 import { Pincodes } from '@/collections/Pincodes'
 import { PriceBooks } from '@/collections/PriceBooks'
+import { Planters } from '@/collections/Planters'
+import { Skus } from '@/collections/Skus'
+import { SkuStock } from '@/collections/SkuStock'
+import { Species } from '@/collections/Species'
+import { SupplierBatches } from '@/collections/SupplierBatches'
+import { Orders } from '@/collections/Orders'
+import { Riders } from '@/collections/Riders'
+import { Dispatches } from '@/collections/Dispatches'
 
 const filename = fileURLToPath(import.meta.url)
 const dirname = path.dirname(filename)
@@ -36,7 +44,32 @@ export default buildConfig({
     // costs hours.
     importMap: { baseDir: path.resolve(dirname) },
   },
-  collections: [Users, Cities, Zones, DeliveryBands, Pincodes, PriceBooks],
+  collections: [
+    Users,
+    Cities,
+    Zones,
+    DeliveryBands,
+    Pincodes,
+    PriceBooks,
+    Species,
+    Planters,
+    SupplierBatches,
+    Skus,
+    SkuStock,
+    Orders,
+
+    /*
+     * Dispatch. `Riders` MUST be registered before `Dispatches` references it —
+     * `Dispatches.rider` is a `relationTo: 'riders'`, and Payload resolves
+     * relationship targets against the REGISTERED collection set at boot, not
+     * against the filesystem. With `riders` unregistered the config does not
+     * merely warn: `generate: true` types `relationTo` as `CollectionSlug`, so
+     * TypeScript rejects the literal outright (TS2820) and the build fails before
+     * it ever reaches the database.
+     */
+    Riders,
+    Dispatches,
+  ],
   secret: config.payload.secret,
   typescript: {
     outputFile: path.resolve(dirname, 'payload-types.ts'),

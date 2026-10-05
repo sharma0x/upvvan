@@ -150,3 +150,132 @@ Phase 0 has no measured load, and C-5/C-6 make a new service a cost to name rath
 **Why it matters for the stack decision:** this is the phase where a second source of truth for the product record would first appear, because catalogue work is what tempts a second system. Doing geo first means the single-backend property of C-2 is established while there is no product data to disagree about.
 
 **Pre-committed tests for Phase 0**, to be seen red before implementation: rider pay banding (longer route pays strictly more — the core incentive fix, written early on purpose), and multi-city isolation (a new city is configuration only, and P&L queries do not leak).
+
+---
+
+## 2026-10-05 — The storefront picks its city by slug, never by array order
+
+**Decision.** `src/app/page.tsx` selects `DEFAULT_CITY_SLUG = 'bengaluru'`, falls
+back to the single active city if exactly one exists, and warns when more than one
+city is active. It does **not** take `cities[0]`.
+
+**Why.** The first version took `cities[0]` from the active-city list. That is
+correct on a clean database and silently wrong on a real one: the order is whatever
+Postgres returned first, so any stray row with `is_active = true` becomes the
+storefront. It bit us immediately — leftover `lm-miss-*` test cities from earlier
+schema runs were active, so the homepage served an empty catalogue and every PDP
+404'd, with no error anywhere.
+
+**The generalisable rule:** _which city is the shop?_ is an operator decision, not
+something to resolve by array order. An ambiguous answer should be loud. Same
+reasoning as C-2 — a silent default between two candidate sources of truth is a
+defect, not a convenience.
+
+**Also cleaned up:** those test cities had leaked out of earlier runs, which means
+a test fixture could leave a row behind that the storefront then serves. Test data
+that can become production data is a fixture bug, not a cosmetic one.
+
+---
+
+## 2026-10-05 — Money is coerced at the loader boundary, and non-integral paise throws
+
+**Decision.** `toPaise()` in `src/lib/catalogue/loader.server.ts` converts every
+`numeric` money column to integer paise and **throws** `PricingError` if the value is
+not a whole number.
+
+**Why.** `pg` returns `numeric` as a string. `formatPaise` then rejects it via
+`Number.isInteger`, so prices rendered blank — the build was green, typecheck was
+green, and the page was blank. Silent coercion (`Number(x)` at the point of use)
+would have worked and been invisible; that is precisely the risk, because a value
+that coerces today can stop coercing tomorrow and put a float in a paise column.
+
+Asserting at the boundary keeps the non-negotiable ("money is integer paise, never
+floats") true by construction rather than by discipline. A fractional paise value
+that ever appears is a bug we want to hear about immediately, not round.
+
+---
+
+## 2026-10-05 — Adversarial stakeholder review, and what it found
+
+Three reviewers were dispatched to attack the app as **customer**, **head of ops +
+rider**, and **compliance officer + founder**. All three wrote directly to
+Postgres, bypassing every hook and route handler. Findings and their disposition:
+
+### Legal Metrology — was a live breach, now closed
+
+| Finding | Fix |
+|---|---|
+| **Charging above our own declared MRP.** Seed wrote `base × 1.21`, which is the top planter's *uplift*, not its total. XS SKUs sold **1.83×** the declared MRP, MD SKUs **10.05×** — on the same PDP that declared it. r.6(1)(e), extended online by r.6(10). | `skus_mrp_covers_ladder` trigger recomputes the ladder ceiling in SQL; seed and all 12 rows corrected. This was the single most serious finding. |
+| `''` accepted for all five text declarations — a published SKU rendered five of seven declarations as empty. `NOT NULL` does not stop `''`. | `skus_declarations_non_blank`, mirroring the `supplier_batches_bill_is_real` pattern that already existed here. |
+| No consumer-care phone/email on the PDP (r.6(2)). | `SiteFooter` renders entity, address, customer care and grievance contacts site-wide. |
+
+### The licence gate — a legal exposure that was one flag-flip away
+
+`cities_live_requires_licence` only read `status`, but `serviceability.ts` gates on
+`is_active`. So `UPDATE cities SET is_active = true` made unlicensed Hyderabad
+serviceable, and a raw INSERT then wrote a **₹649 order into a city whose Telangana
+nursery licence is only `filed`**. Two fixes: `cities_active_requires_live_licence`
+(covering `is_active`) and `orders_city_may_trade` (so the order itself checks).
+
+Also: `CityRef` in `serviceability.ts` had **no `licence_status` field at all**, so
+the gate never had the value to check even in principle.
+
+### Money — the non-negotiable that wasn't
+
+`AGENTS.md` claimed "A DB CHECK enforces it" about integer paise. True for `skus`,
+**entirely absent for `orders`**. Raw writes accepted `revenue_paise = 199.5`,
+`-5000`, `orders_items.price_paise = -99999`. Added `orders_money_is_paise`,
+`orders_items_price_is_paise`, and a deferred trigger reconciling revenue against
+the sum of lines — otherwise `revenue_paise = 999999` on a 1-paise line is legal and
+`city_pnl` reports whatever was written.
+
+### Rider pay — the incentive fix was decorative
+
+Monotonicity was correctly enforced, but the review found three holes and one
+absurdity: **band coverage need not be contiguous** (a city with only 0–3 and 7–12
+was accepted, and `bandForDistance` then threw `NO_MATCHING_BAND` for the whole
+3–7km middle — a rider paid nothing); **all bands were deletable**, leaving a live
+city that pays nothing; **a single flat band** trivially satisfies monotonicity and
+is exactly the structure the thesis exists to reject. And `payForDistance` is called
+**only from its own test file** — `loadGeo()` projects the bands and discards them.
+
+No penalty mechanism exists anywhere in the codebase. That is a genuine pass — the
+thesis is honestly held.
+
+### What does not exist yet, stated plainly
+
+- **No stock, reservation, TTL, atomic decrement or replay guard.** `orders_items`
+  has no `quantity` column, so ordering 3 identical plants is not even expressible.
+  The same physical plant can be sold to unlimited concurrent customers.
+- **No rider surface**, no `orders.rider_id`, no delivery-proof columns. DELIVERED
+  is reachable by a raw INSERT with zero proof — prompt test 1 is not yet satisfied.
+- `contribution_paise` is `revenue × 0.25`, hardcoded, and **rider pay is not a
+  cost anywhere**. So `city_pnl` is structurally incapable of showing a
+  delivery-heavy city as losing — the exact instrument needed to avoid Urvann's
+  nine failed launches.
+- **DPDP consent architecture does not exist.** `auth.ts` carries a comment
+  claiming it does, above an unrelated `accountLinking` config. The comment
+  actively misleads a future reader and has been corrected.
+
+### Customer-facing defects found and fixed
+
+- `skuId: "not-a-number"` produced an **unhandled 500 with an empty body** — the
+  price-resolution loop sat outside the try. Now validated at the boundary (400).
+- An **inactive planter** was silently charged at base price while still persisting
+  `planterId`: ops deactivating a pot gave it away. Now refused (409).
+- **Every successful order 404'd** — `CartClient` redirected to `/order/[code]`
+  and the route did not exist. Added; a customer who paid was told the order failed.
+- `lines.some((l) => true)` told a soil-only cart "plants are replaced, not
+  refunded". Now states the remedy that matches the cart.
+
+### Two traps worth keeping
+
+**`jsonb_each_text('...'::jsonb)` parses as an OPERATOR in Postgres**
+(`operator does not exist: record -> text`). The resulting broken function fired on
+every insert and update to `skus`, masking every *other* constraint on the table —
+11 tests failed with a message that pointed nowhere near the real cause. A 4-row
+lookup table does not need to be clever.
+
+**A backtick inside a `sql\`...\`` comment terminates the template literal.** Cost
+two failed migrations with `Expected ")" but found "plantPriceForTier"` pointing at
+SQL that was fine.
