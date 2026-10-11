@@ -32,7 +32,6 @@
  * an unknown status is a thrown error, not a permissive default.
  */
 
-
 /**
  * The error every rule violation in the order domain raises.
  *
@@ -277,7 +276,10 @@ export function canonicalStatus(stored: string): OrderStatus {
  * behind the code: visible, specific, and impossible to mistake for a bug in the
  * payment path.
  */
-export function supportsDatabaseStatus(enumLabels: readonly string[], status: OrderStatus): boolean {
+export function supportsDatabaseStatus(
+  enumLabels: readonly string[],
+  status: OrderStatus,
+): boolean {
   return enumLabels.includes(status)
 }
 

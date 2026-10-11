@@ -156,7 +156,9 @@ export const Orders: CollectionConfig = {
           name: 'pricePaise',
           type: 'number',
           required: true,
-          admin: { description: 'Integer paise, derived from base price × size tier + planter uplift.' },
+          admin: {
+            description: 'Integer paise, derived from base price × size tier + planter uplift.',
+          },
         },
         {
           name: 'planter',

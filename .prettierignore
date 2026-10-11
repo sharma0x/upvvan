@@ -12,3 +12,6 @@ src/app/theme.css
 .env.local
 .DS_Store
 trash
+# Rewritten by `next build` / `next dev` on every run. Linting it is a CI flake,
+# not a code standard: the diff is Next's, not ours.
+next-env.d.ts

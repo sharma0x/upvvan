@@ -1,11 +1,11 @@
-import { cookies } from 'next/headers'
+import { cookies, headers } from 'next/headers'
 import { notFound } from 'next/navigation'
 
 import { formatPaise } from '@/lib/catalogue/pricing'
-import { config } from '@/lib/config'
 import { db, loadOrderVerified, normaliseCode } from '@/lib/orders/db'
 import { hsnFor, taxInvoice } from '@/lib/orders/invoice'
-import { orderCookieName, verifyOrderSignature } from '@/lib/orders/cookie'
+import { authoriseOrderAccess } from '@/lib/orders/access'
+import { loadBusinessSettings } from '@/lib/settings/server'
 import PrintButton from './PrintButton'
 
 /**
@@ -28,8 +28,15 @@ import PrintButton from './PrintButton'
  * it should depend on the state of the page it was linked from.
  *
  * ── AUTHORISATION ───────────────────────────────────────────────────────────
- * The signed cookie, same as the order page. This page renders an address and a
- * GSTIN-bearing invoice; it is not linkable.
+ *
+ * The signed order cookie OR a customer session that owns the order. See
+ * `src/lib/orders/access.ts`.
+ *
+ * This page used to accept the cookie only, and `/account` had no link to it, so
+ * the tax invoice was reachable by exactly one route: the guest who had done the
+ * code+phone lookup. A signed-in customer — who had already proved ownership of
+ * the same phone number with an OTP, and whose own order list sits one click away
+ * — could not reach the document for a plant they had already paid for.
  */
 export const dynamic = 'force-dynamic'
 
@@ -51,29 +58,44 @@ export default async function InvoicePage({ params }: { params: Promise<{ code: 
   const normalised = normaliseCode(code)
 
   const jar = await cookies()
-  const signature = jar.get(orderCookieName(normalised))?.value
-  if (!signature || !verifyOrderSignature(normalised, signature)) notFound()
+  const access = await authoriseOrderAccess(
+    normalised,
+    (await headers()).get('cookie') ?? undefined,
+  )
+  if (!access) notFound()
+  void jar
 
   const found = await loadOrderVerified(db(), normalised)
   if (!found) notFound()
 
   const { order, items } = found
   const invoice = taxInvoice(order.orderCode)
+  /*
+   * The statutory block on a tax invoice comes from the settings ROW, not from
+   * the environment.
+   *
+   * Six customer-facing surfaces read `config.compliance` directly, so correcting
+   * a misspelt registered address in the admin panel fixed the footer and nothing
+   * else — while the invoice, `/contact`, `/grievance` and the legal policies kept
+   * printing the old one. Those four are exactly what a Legal Metrology or
+   * Consumer Protection (E-Commerce) Rules r.4(2) inspection reads.
+   */
+  const settings = await loadBusinessSettings()
 
   return (
-    <main className="mx-auto max-w-[720px] px-base py-2xl">
+    <main className="px-base py-2xl mx-auto max-w-[720px]">
       <PrintButton invoiceNumber={invoice.invoiceNumber} />
 
-      <header className="border-border mt-4 border-b pb-base">
+      <header className="border-border pb-base mt-4 border-b">
         <h1 className="mt-0 mb-1">Tax invoice</h1>
         <p className="m-0 text-sm">
-          <strong>{config.compliance.legalEntityName || 'Upvvan'}</strong>
+          <strong>{settings.legalEntityName || 'Upvvan'}</strong>
           <br />
-          {config.compliance.principalAddress}
+          {settings.principalAddress}
           <br />
           {invoice.gstinMissing ? (
             <span className="text-warning">
-              GSTIN not configured — set GSTIN in the environment before issuing this invoice.
+              GSTIN not configured — set it in Business settings before issuing this invoice.
             </span>
           ) : (
             `GSTIN: ${invoice.gstin} · State code ${invoice.gstStateCode}`
@@ -171,17 +193,17 @@ export default async function InvoicePage({ params }: { params: Promise<{ code: 
         the classic bug here: it loses a paisa on every odd-rupee invoice, and a
         receipt whose tax columns do not add up to the tax is a receipt nobody trusts.
       */}
-      <TaxBreakdown revenuePaise={order.revenuePaise} />
+      <TaxBreakdown revenuePaise={order.revenuePaise} rateBp={settings.gstRateBp} />
 
       <p className="text-ink-muted mt-lg text-xs">
-        Prices are inclusive of all taxes. Plants are replaced, not refunded; consumables and planters
-        are settled in money within 24 hours. This is a computer-generated invoice and does not
-        require a signature.
+        Prices are inclusive of all taxes. Plants are replaced, not refunded; consumables and
+        planters are settled in money within 24 hours. This is a computer-generated invoice and does
+        not require a signature.
       </p>
       <p className="text-ink-muted mt-1 text-xs">
-        Grievance officer: {config.compliance.grievanceOfficerName || '—'} ·{' '}
-        {config.compliance.grievanceOfficerEmail || config.compliance.customerCareEmail} ·{' '}
-        {config.compliance.customerCarePhone}
+        Grievance officer: {settings.grievanceOfficerName || '—'} ·{' '}
+        {settings.grievanceOfficerEmail || settings.customerCareEmail} ·{' '}
+        {settings.customerCarePhone}
       </p>
     </main>
   )
@@ -193,22 +215,23 @@ export default async function InvoicePage({ params }: { params: Promise<{ code: 
  * `taxable = floor(total / (1 + rate))`, then `tax = total - taxable` — the tax is
  * the REMAINDER, not a rounded-up figure, so the three numbers always reconcile.
  * Then the tax is split into CGST and SGST with the odd paisa going to SGST.
+ *
+ * The rate is a PROP, read from `business_settings.gst_rate_bp`. It used to be
+ * read here through a structural cast of `config.business.defaultTaxRateBp` with a
+ * hardcoded `?? 1800` — a fifth copy of a number an owner can change in the admin
+ * panel, and the one copy that printed on the document an auditor reads.
  */
-function TaxBreakdown({ revenuePaise }: { revenuePaise: number }) {
-  // config.business.defaultTaxRateBp is 1800 = 18%. Read through the same cast the
-  // invoice module uses, because config.ts is owned elsewhere and the key may not be
-  // present yet.
-  const rateBp = (
-    config as unknown as { business?: { defaultTaxRateBp?: number } }
-  ).business?.defaultTaxRateBp ?? 1800
-
+function TaxBreakdown({ revenuePaise, rateBp }: { revenuePaise: number; rateBp: number }) {
   const taxablePaise = Math.floor((revenuePaise * 10_000) / (10_000 + rateBp))
   const taxPaise = revenuePaise - taxablePaise
   const cgstPaise = Math.floor(taxPaise / 2)
   const sgstPaise = taxPaise - cgstPaise
 
   return (
-    <dl className="mt-base m-0 grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-sm" data-testid="tax-breakdown">
+    <dl
+      className="mt-base m-0 grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-sm"
+      data-testid="tax-breakdown"
+    >
       <dt className="text-ink-muted">Taxable value</dt>
       <dd className="m-0">{formatPaise(taxablePaise)}</dd>
 

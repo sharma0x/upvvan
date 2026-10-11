@@ -119,12 +119,15 @@ try {
 
   // ── 3. The click must actually work end to end ──────────────────────────────
   const before = await page.evaluate(() =>
-    [...document.querySelectorAll('button')].find((b) => b.textContent.includes('Add to cart'))
+    [...document.querySelectorAll('button')]
+      .find((b) => b.textContent.includes('Add to cart'))
       ?.textContent.trim(),
   )
 
   await page.evaluate(() =>
-    [...document.querySelectorAll('button')].find((b) => b.textContent.includes('Add to cart')).click(),
+    [...document.querySelectorAll('button')]
+      .find((b) => b.textContent.includes('Add to cart'))
+      .click(),
   )
   await new Promise((r) => setTimeout(r, 1200))
 
@@ -138,7 +141,8 @@ try {
   await page.goto(`${BASE}/plant/jade-plant?tier=XS`, { waitUntil: 'networkidle2' })
   const prices = await page.evaluate(async () => {
     const label = () =>
-      [...document.querySelectorAll('button')].find((b) => b.textContent.includes('Add to cart'))
+      [...document.querySelectorAll('button')]
+        .find((b) => b.textContent.includes('Add to cart'))
         ?.textContent.trim()
     const pots = [...document.querySelectorAll('fieldset button')]
     const start = label()

@@ -137,9 +137,7 @@ export function applyPlanter(plant: PlantSpec, planter: PlanterSpec): PriceBreak
   // Ordering matters — a +121% pot on an XS plant is a different number than on
   // an XL, and the ladder a customer sees is built from this.
   const sizeMultiplierBp = SIZE_TIER_MULTIPLIER[plant.sizeTier]
-  const plantPriceAtTier = Math.ceil(
-    (plant.basePricePaise * (10_000 + sizeMultiplierBp)) / 10_000,
-  )
+  const plantPriceAtTier = Math.ceil((plant.basePricePaise * (10_000 + sizeMultiplierBp)) / 10_000)
 
   if (planter.upliftBp < 0) {
     throw new PricingError(
@@ -177,10 +175,7 @@ export function applyPlanter(plant: PlantSpec, planter: PlanterSpec): PriceBreak
  * rule 1 — the honest option is not buried at the bottom of a list, it is where
  * the customer's eye lands first.
  */
-export function priceLadder(
-  plant: PlantSpec,
-  planters: readonly PlanterSpec[],
-): PriceBreakdown[] {
+export function priceLadder(plant: PlantSpec, planters: readonly PlanterSpec[]): PriceBreakdown[] {
   const entry: PlanterSpec = {
     planterId: 'grow-pot',
     name: 'Grow pot (decorate on arrival)',

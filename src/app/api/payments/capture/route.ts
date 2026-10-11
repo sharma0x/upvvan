@@ -1,6 +1,11 @@
 import { NextResponse } from 'next/server'
 
 import { clientIp } from '@/lib/orders/client-ip'
+import { loadBusinessSettings } from '@/lib/settings/server'
+import { sendEmail } from '@/lib/email/send'
+import { customerMailbox } from '@/lib/email/address'
+import { orderConfirmation } from '@/lib/email/templates'
+import { config } from '@/lib/config'
 import { db, databaseOrderStatuses, normaliseCode, phoneTail } from '@/lib/orders/db'
 import { consume } from '@/lib/orders/rate-limit'
 import { appendEvent } from '@/lib/orders/db'
@@ -156,10 +161,7 @@ export async function POST(request: Request): Promise<NextResponse> {
   }
 
   if (intent.orderCode !== order.order_code) {
-    return NextResponse.json(
-      { message: 'This payment is not for that order.' },
-      { status: 409 },
-    )
+    return NextResponse.json({ message: 'This payment is not for that order.' }, { status: 409 })
   }
 
   const orderRevenuePaise = Number(order.revenue_paise)
@@ -325,6 +327,27 @@ export async function POST(request: Request): Promise<NextResponse> {
 
     await client.query('COMMIT')
 
+    /*
+     * ── THE RECEIPT, AFTER THE COMMIT AND NOT AWAITED ──────────────────────
+     *
+     * The customer's confirmation was already sent when the order was placed; this
+     * is the one that says the money moved, and it carries the gateway's reference
+     * so a screenshot of their bank statement is enough for support to find the
+     * charge.
+     *
+     * Placed here for the same reason as in `POST /api/orders`: never inside the
+     * transaction (a row lock held across an SMTP round trip), never awaited (a
+     * payment response whose latency the customer pays for), and never able to
+     * throw — an e-mail failure here must not turn a captured payment into an
+     * error page, because that is how a real charge becomes a disputed one.
+     *
+     * Failures land in `email_log` with status 'failed' and a re-send button, so
+     * the gap is visible and closable rather than silent.
+     */
+    void sendReceipt(order.order_code).catch((err: unknown) => {
+      console.error('[payments] receipt notification failed:', err)
+    })
+
     return NextResponse.json({
       orderCode: order.order_code,
       paymentState: 'captured',
@@ -354,4 +377,100 @@ export async function POST(request: Request): Promise<NextResponse> {
   } finally {
     client.release()
   }
+}
+
+/**
+ * The receipt e-mail, and a re-read of everything the template needs.
+ *
+ * ── WHY IT RE-READS THE ORDER RATHER THAN RECEIVING IT ──────────────────────
+ *
+ * Because the capture handler's row was read BEFORE the transaction and carries
+ * none of it — no name, no phone, no items. Passing the values it happens to hold
+ * would produce a receipt that is missing half of what it should say, which is
+ * worse than no receipt: it looks like a system that does not know what it sold.
+ *
+ * One extra query on a path that has already spoken to a payment gateway is
+ * nothing, and it means the receipt is correct even if the caller is not.
+ */
+async function sendReceipt(orderCode: string): Promise<void> {
+  const settings = await loadBusinessSettings()
+
+  const { rows } = await db().query<{
+    order_code: string
+    customer_name: string
+    customer_phone: string
+    revenue_paise: string
+    address_line1: string
+    address_line2: string | null
+    address_landmark: string | null
+    address_city: string | null
+    pincode: string
+    city_name: string | null
+  }>(
+    `SELECT o."order_code", o."customer_name", o."customer_phone", o."revenue_paise",
+            o."address_line1", o."address_line2", o."address_landmark",
+            o."address_city", o."pincode", c."name" AS city_name
+       FROM "orders" o
+       LEFT JOIN "cities" c ON c."id" = o."city_id"
+      WHERE o."order_code" = $1`,
+    [orderCode],
+  )
+  const order = rows[0]
+  if (!order) return
+
+  const items = await db().query<{
+    display_name: string
+    price_paise: string
+    planter_name: string | null
+    size_tier: string
+  }>(
+    `SELECT COALESCE(NULLIF(sp."common_name", ''), NULLIF(btrim(k."description"), ''), k."sku_code")
+              AS display_name,
+            i."price_paise", p."name" AS planter_name, k."size_tier"
+       FROM "orders_items" i
+       JOIN "skus" k ON k."id" = i."sku_id"
+       LEFT JOIN "species" sp ON sp."id" = k."species_id"
+       LEFT JOIN "planters" p ON p."id" = i."planter_id"
+      WHERE i."_parent_id" = (SELECT "id" FROM "orders" WHERE "order_code" = $1)
+      ORDER BY i."_order"`,
+    [orderCode],
+  )
+
+  const base = config.server.url.replace(/\/$/, '')
+  const template = orderConfirmation({
+    orderCode: order.order_code,
+    customerName: order.customer_name,
+    lines: items.rows.map((i) => ({
+      name: i.display_name,
+      variant: [i.size_tier === 'XS' ? '' : `${i.size_tier} size`, i.planter_name]
+        .filter(Boolean)
+        .join(' · '),
+      quantity: 1,
+      linePaise: Number(i.price_paise),
+    })),
+    subtotalPaise: Number(order.revenue_paise),
+    deliveryPaise: 0,
+    totalPaise: Number(order.revenue_paise),
+    addressLines: [
+      order.address_line1,
+      order.address_line2,
+      order.address_landmark,
+      order.address_city,
+      order.pincode,
+    ].filter((l): l is string => Boolean(l && l.trim() !== '')),
+    cityName: order.city_name ?? '',
+    estimatedWindow: 'next working day, or the same day if you order before the cutoff',
+    supportPhone: settings.customerCarePhone || 'our published number',
+    trackUrl: `${base}/track-order`,
+    receiptUrl: `${base}/order/${order.order_code}`,
+  })
+
+  await sendEmail({
+    kind: 'order_receipt',
+    to: customerMailbox(order.customer_name, order.customer_phone),
+    toName: order.customer_name,
+    subject: `Payment received · ${order.order_code}`,
+    text: template.text,
+    html: template.html,
+  })
 }

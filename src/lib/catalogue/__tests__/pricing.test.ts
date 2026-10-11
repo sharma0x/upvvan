@@ -115,8 +115,7 @@ describe('planter ladder pricing', () => {
     it('orders tiers cheapest to most expensive', () => {
       const prices = (['XS', 'MD', 'LG', 'XL'] as const).map(
         (tier) =>
-          applyPlanter({ ...MONEY_PLANT, sizeTier: tier }, planter('grow-pot', 0, 0))
-            .totalPaise,
+          applyPlanter({ ...MONEY_PLANT, sizeTier: tier }, planter('grow-pot', 0, 0)).totalPaise,
       )
       expect(prices).toEqual([...prices].sort((a, b) => a - b))
     })

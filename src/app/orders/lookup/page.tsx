@@ -24,8 +24,7 @@ import LookupClient from './LookupClient'
  */
 export const metadata = {
   title: 'Find your order — Upvvan',
-  description:
-    'Look up an Upvvan order with your order code and the phone number on the order.',
+  description: 'Look up an Upvvan order with your order code and the phone number on the order.',
   // A lookup form is not content. No value in indexing it, and the page is a
   // credential prompt, which is the last thing that should appear in a search result.
   robots: { index: false, follow: true },
@@ -39,7 +38,7 @@ export default async function LookupPage({
   const { orderCode } = await searchParams
 
   return (
-    <main className="mx-auto max-w-[560px] px-base py-2xl">
+    <main className="px-base py-2xl mx-auto max-w-[560px]">
       <Link href="/" className="text-primary text-sm no-underline hover:underline">
         ← Back to the nursery
       </Link>

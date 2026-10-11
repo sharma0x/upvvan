@@ -3,7 +3,7 @@
 import { createAuthClient } from 'better-auth/react'
 import { phoneNumberClient } from 'better-auth/client/plugins'
 
-import { config } from '@/lib/config'
+import { publicOrigin } from '@/lib/public-config'
 
 /**
  * Browser-side better-auth client.
@@ -33,11 +33,28 @@ import { config } from '@/lib/config'
  * on `/account` for a *signed-in* customer, which is the worst possible moment
  * for it to surface.
  *
- * The absolute origin comes from `config.server.url`, so it stays in step with
- * the environment rather than being pinned to localhost in code.
+ * ── WHY THE ORIGIN COMES FROM `public-config` AND NOT `config` ──────────────
+ *
+ * This module is `'use client'`, and `@/lib/config` THROWS when it is evaluated
+ * in a production bundle — `secret('PAYLOAD_SECRET')` finds nothing, because
+ * `process.env` in a browser is not the server's environment, and NODE_ENV is
+ * `production`.
+ *
+ * The consequence was that `/sign-in` — the one page every returning customer must
+ * pass through — rendered "This page did not load" in a real browser against a
+ * production build, with this in the console:
+ *
+ *     ConfigError: PAYLOAD_SECRET is required in production.
+ *
+ * and nothing else in the repository could see it. Development works (the dev
+ * fallback), curl works (the server-rendered HTML is correct), the build is clean,
+ * the tests pass, the journey passes, the business simulation passes. Only a
+ * browser loads the client bundle.
+ *
+ * `public-config.ts` exposes exactly one value — this origin — and refuses to grow.
  */
 export const authClient = createAuthClient({
-  baseURL: `${config.server.url}/api/auth`,
+  baseURL: `${publicOrigin}/api/auth`,
   plugins: [phoneNumberClient()],
 })
 

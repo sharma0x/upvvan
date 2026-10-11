@@ -19,6 +19,22 @@ import type { CollectionConfig } from 'payload'
  */
 export const Skus: CollectionConfig = {
   slug: 'skus',
+  labels: {
+    /*
+     * Explicit, because Payload pluralised the SLUG and produced "Skuses".
+     *
+     * A naive `+ 'es'` on `skus` is not an English word, and it was sitting at the
+     * top of the Catalogue group in the sidebar where the owner reads it every
+     * day. The label is what a person recognises the collection by, so it is worth
+     * one line rather than a lifetime of "is that a typo?".
+     *
+     * Singular "Product" is chosen over "SKU" deliberately: the collection also
+     * holds consumables — a bag of cocopeat has a SKU and is not a SKU in the
+     * everyday sense, and this is the screen where somebody adds one.
+     */
+    singular: 'Product',
+    plural: 'Products',
+  },
   admin: {
     useAsTitle: 'skuCode',
     group: 'Catalogue',
@@ -119,8 +135,7 @@ export const Skus: CollectionConfig = {
       name: 'legalMetrology',
       label: 'Legal Metrology declarations (PC Rules 2011 r.6(1), r.6(10))',
       admin: {
-        description:
-          'Mandatory on the listing. Only month-and-year-of-packing is exempt online.',
+        description: 'Mandatory on the listing. Only month-and-year-of-packing is exempt online.',
       },
       fields: [
         {
@@ -166,9 +181,7 @@ export const Skus: CollectionConfig = {
               'MRP INCLUSIVE OF ALL TAXES, in paise. This is the price the customer pays — it must equal basePricePaise plus the selected planter, never a bare-plant figure.',
           },
           validate: (value: number | null | undefined) =>
-            value == null || !Number.isInteger(value)
-              ? 'MRP must be whole paise.'
-              : true,
+            value == null || !Number.isInteger(value) ? 'MRP must be whole paise.' : true,
         },
         {
           name: 'bestBefore',
@@ -225,6 +238,17 @@ export const Skus: CollectionConfig = {
           ],
         },
       ],
+    },
+
+    // ── Description for non-species items ───────────────────────────────────
+    {
+      name: 'description',
+      type: 'textarea',
+      maxLength: 600,
+      admin: {
+        description:
+          'For CONSUMABLES AND PLANTERS ONLY. A plant takes its description from its species — two tiers of a jade plant must not be able to disagree about what a jade plant is. A bag of cocopeat has no species, so this is where its description lives; a CHECK constraint refuses it on a plant.',
+      },
     },
 
     // ── Traceability ────────────────────────────────────────────────────────

@@ -63,7 +63,8 @@ try {
   await page.evaluate(() => sessionStorage.clear())
 
   await page.waitForFunction(
-    () => [...document.querySelectorAll('button')].some((b) => b.textContent.includes('Add to cart')),
+    () =>
+      [...document.querySelectorAll('button')].some((b) => b.textContent.includes('Add to cart')),
     { timeout: 60_000, polling: 250 },
   )
 
@@ -83,7 +84,11 @@ try {
   check('add-to-cart lands on /cart', page.url().endsWith('/cart'), `landed on ${page.url()}`)
 
   const cart = await page.evaluate(() => sessionStorage.getItem('upvvan.cart'))
-  check('sessionStorage cart was written', Boolean(cart) && cart !== '[]', (cart ?? '').slice(0, 80))
+  check(
+    'sessionStorage cart was written',
+    Boolean(cart) && cart !== '[]',
+    (cart ?? '').slice(0, 80),
+  )
 
   // ── 2 · CHECKOUT: DELIVERY DETAILS ─────────────────────────────────────────
   await page.goto(`${BASE}/order/checkout`, { waitUntil: 'networkidle2' })
@@ -150,9 +155,15 @@ try {
   const stateAttr = await page.$eval('[data-testid="order-payment-state"]', (el) =>
     el.getAttribute('data-payment-state'),
   )
-  check('order payment state is captured', stateAttr === 'captured', `data-payment-state="${stateAttr}"`)
+  check(
+    'order payment state is captured',
+    stateAttr === 'captured',
+    `data-payment-state="${stateAttr}"`,
+  )
 
-  const headline = await page.$eval('[data-testid="order-payment-state"]', (el) => el.textContent.trim())
+  const headline = await page.$eval('[data-testid="order-payment-state"]', (el) =>
+    el.textContent.trim(),
+  )
   check(
     'headline says Payment received, NOT "Order placed"',
     /payment received/i.test(headline) && !/order placed/i.test(headline),
@@ -223,12 +234,11 @@ try {
   check('invoice page renders', invoiceText.includes('Tax invoice'))
   check(
     'invoice breaks out CGST/SGST and they reconcile',
-    invoiceText.includes('CGST') && invoiceText.includes('SGST') && invoiceText.includes('Total tax'),
+    invoiceText.includes('CGST') &&
+      invoiceText.includes('SGST') &&
+      invoiceText.includes('Total tax'),
   )
-  check(
-    'invoice lists the HSN per line',
-    /HSN|0602/.test(invoiceText),
-  )
+  check('invoice lists the HSN per line', /HSN|0602/.test(invoiceText))
 
   // ── 10 · ORDER LOOKUP — WRONG PHONE IS REFUSED ─────────────────────────────
   await page.goto(`${BASE}/orders/lookup`, { waitUntil: 'networkidle2' })
@@ -238,12 +248,10 @@ try {
   await page.click('[data-testid="lookup-submit"]')
   await page.waitForSelector('[data-testid="lookup-error"]', { timeout: 20_000 })
 
-  const lookupError = await page.$eval('[data-testid="lookup-error"]', (el) => el.textContent.trim())
-  check(
-    'wrong phone is refused',
-    /could not find/i.test(lookupError),
-    lookupError,
+  const lookupError = await page.$eval('[data-testid="lookup-error"]', (el) =>
+    el.textContent.trim(),
   )
+  check('wrong phone is refused', /could not find/i.test(lookupError), lookupError)
   check(
     'refusal does not confirm the code exists',
     !/invalid code|no such order|not found/i.test(lookupError),
@@ -263,8 +271,14 @@ try {
   )
   check('correct phone opens the order', page.url().includes(`/order/${orderCode}`), page.url())
 
-  const lookedUpTotal = await page.$eval('[data-testid="order-total"]', (el) => el.textContent.trim())
-  check('looked-up order shows the same total', lookedUpTotal === total, `${lookedUpTotal} vs ${total}`)
+  const lookedUpTotal = await page.$eval('[data-testid="order-total"]', (el) =>
+    el.textContent.trim(),
+  )
+  check(
+    'looked-up order shows the same total',
+    lookedUpTotal === total,
+    `${lookedUpTotal} vs ${total}`,
+  )
 
   // ── 12 · THE CLAIM PAGE IS AUTHORISED BY THE SAME COOKIE ────────────────────
   //

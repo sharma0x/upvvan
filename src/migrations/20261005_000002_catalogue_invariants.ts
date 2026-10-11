@@ -211,16 +211,12 @@ export async function down({ db }: MigrateDownArgs): Promise<void> {
   await db.execute(sql`DROP FUNCTION IF EXISTS upvvan_assert_batch_traceable();`)
   await db.execute(sql`ALTER TABLE "skus" DROP CONSTRAINT IF EXISTS "skus_price_is_paise";`)
   await db.execute(sql`ALTER TABLE "skus" DROP CONSTRAINT IF EXISTS "skus_mrp_is_paise";`)
-  await db.execute(
-    sql`ALTER TABLE "skus" DROP CONSTRAINT IF EXISTS "skus_dimensions_positive";`,
-  )
+  await db.execute(sql`ALTER TABLE "skus" DROP CONSTRAINT IF EXISTS "skus_dimensions_positive";`)
   await db.execute(
     sql`ALTER TABLE "skus" DROP CONSTRAINT IF EXISTS "skus_plant_dimensions_required";`,
   )
   await db.execute(
     sql`ALTER TABLE "skus" DROP CONSTRAINT IF EXISTS "skus_legal_metrology_required";`,
   )
-  await db.execute(
-    sql`ALTER TABLE "skus" DROP CONSTRAINT IF EXISTS "skus_publish_requires_batch";`,
-  )
+  await db.execute(sql`ALTER TABLE "skus" DROP CONSTRAINT IF EXISTS "skus_publish_requires_batch";`)
 }

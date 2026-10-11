@@ -76,7 +76,8 @@ export const SkuStock: CollectionConfig = {
       },
       validate: (value: number | null | undefined) => {
         if (value == null) return 'A stock count is required.'
-        if (!Number.isInteger(value)) return 'Stock must be whole units — a fraction of a plant cannot be sold.'
+        if (!Number.isInteger(value))
+          return 'Stock must be whole units — a fraction of a plant cannot be sold.'
         if (value < 0) return 'Stock cannot be negative.'
         return true
       },

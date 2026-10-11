@@ -7,6 +7,9 @@ import { loadCatalogue } from '@/lib/catalogue/loader.server'
 import { formatPaise } from '@/lib/catalogue/pricing'
 import { leadImageForSpecies } from '@/lib/catalogue/images'
 import AddToCart from '@/components/catalogue/AddToCart'
+import SaveForLater from '@/components/catalogue/SaveForLater'
+import { getCustomerId } from '@/lib/auth/session'
+import { getPool } from '@/lib/db/pool'
 
 /**
  * The PDP — the compliance-critical screen.
@@ -83,12 +86,12 @@ export default async function PlantPage({
   const photo = leadImageForSpecies(item.slug)
 
   return (
-    <main id="main" tabIndex={-1} className="mx-auto max-w-[880px] px-base py-2xl">
-      <Link href="/" className="text-sm text-primary no-underline hover:underline">
+    <main id="main" tabIndex={-1} className="px-base py-2xl mx-auto max-w-[880px]">
+      <Link href="/" className="text-primary text-sm no-underline hover:underline">
         ← All plants
       </Link>
 
-      <div className="mt-base grid grid-cols-1 gap-xl md:grid-cols-2">
+      <div className="mt-base gap-xl grid grid-cols-1 md:grid-cols-2">
         <div>
           {/*
             The specimen photograph.
@@ -116,7 +119,7 @@ export default async function PlantPage({
                 className="object-cover"
               />
             ) : (
-              <div className="text-ink-muted flex h-full items-center justify-center px-base text-center font-[var(--font-h2)] text-xl">
+              <div className="text-ink-muted px-base flex h-full items-center justify-center text-center text-xl font-[var(--font-h2)]">
                 {item.commonName}
               </div>
             )}
@@ -143,30 +146,28 @@ export default async function PlantPage({
             with a caliper, not estimated.
           </p>
 
-          <p className="m-0 text-label-caps text-primary">
+          <p className="text-label-caps text-primary m-0">
             {item.sizeTier} · {item.care.difficulty} to keep
           </p>
           <h1 className="my-xs">{item.commonName}</h1>
-          {item.botanicalName && (
-            <p className="mt-0 italic text-ink-muted">{item.botanicalName}</p>
-          )}
+          {item.botanicalName && <p className="text-ink-muted mt-0 italic">{item.botanicalName}</p>}
           {item.description && <p className="text-ink-muted">{item.description}</p>}
 
-          <dl className="mt-base grid grid-cols-2 gap-sm">
+          <dl className="mt-base gap-sm grid grid-cols-2">
             <div>
-              <dt className="m-0 text-label-caps text-ink-muted">Light</dt>
+              <dt className="text-label-caps text-ink-muted m-0">Light</dt>
               <dd className="m-0">{item.care.light.replace('_', ' ')}</dd>
             </div>
             <div>
-              <dt className="m-0 text-label-caps text-ink-muted">Water</dt>
+              <dt className="text-label-caps text-ink-muted m-0">Water</dt>
               <dd className="m-0">every {item.care.waterIntervalDays} days</dd>
             </div>
             <div>
-              <dt className="m-0 text-label-caps text-ink-muted">Soil moisture</dt>
+              <dt className="text-label-caps text-ink-muted m-0">Soil moisture</dt>
               <dd className="m-0">{item.care.soilMoistureTargetPct}%</dd>
             </div>
             <div>
-              <dt className="m-0 text-label-caps text-ink-muted">Toxicity</dt>
+              <dt className="text-label-caps text-ink-muted m-0">Toxicity</dt>
               <dd className="m-0">
                 {item.care.toxicity === 'safe'
                   ? 'Safe for pets and children'
@@ -180,96 +181,116 @@ export default async function PlantPage({
             delivery. We do not display a number we have not measured a DOA rate
             to support — use-cases.md §11.
           */}
-          <p className="mt-base rounded-sm border border-success bg-success-soft px-base py-sm">
-            <strong>48-hour arrival guarantee.</strong> If it arrives damaged or
-            dead, we replace it. We do not ask you to pay to send it back.
+          <p className="mt-base border-success bg-success-soft px-base py-sm rounded-sm border">
+            <strong>48-hour arrival guarantee.</strong> If it arrives damaged or dead, we replace
+            it. We do not ask you to pay to send it back.
           </p>
 
-          <p className="mt-sm text-sm text-ink-muted">
-            Please keep the unboxing video. It is how we replace fairly, and how we
-            stop people claiming deliveries that never happened.
+          <p className="mt-sm text-ink-muted text-sm">
+            Please keep the unboxing video. It is how we replace fairly, and how we stop people
+            claiming deliveries that never happened.
           </p>
         </div>
 
         <div>
           <AddToCart item={item} />
 
-          <div className="mt-lg rounded-md border border-border bg-surface-raised p-base">
-            <p className="m-0 text-label-caps text-ink-muted">
-              Plant it in the grow pot
-            </p>
-            <p className="mb-0 text-sm text-ink-muted">
-              We ship in a plastic grow pot so nothing is crushed in transit and
-              nothing is over-packed. Decorate it yourself at home — it costs you
-              less and it is the fun part.
+          {/*
+            ── THE WAITLIST ───────────────────────────────────────────────────
+
+            The one button on this site that asks for an account, and it asks for
+            one to do a single thing: hold a plant against the person who asked
+            for it, so we can tell them when it is back. That is worth one OTP,
+            because an e-mail typed into a text box is a list we cannot reach on
+            the channel their delivery arrives on and cannot tell from a typo.
+
+            It is NOT the account wall the research warns about — that is a signup
+            gate in front of a purchase, and the one competitor documented as
+            doing it has the worst complaint corpus in the dataset. Nothing else
+            on this page or at checkout requires an account.
+
+            Rendered only when the plant is actually out of stock. Offering
+            "tell me when it's back" for something sitting on the shelf is a
+            confession that we do not know our own stock.
+          */}
+          {item.stock <= 0 && (
+            <SaveForLater
+              skuId={Number(item.skuId)}
+              name={item.commonName}
+              initiallySaved={await isSavedByCustomer(item.skuId)}
+            />
+          )}
+
+          <div className="mt-lg border-border bg-surface-raised p-base rounded-md border">
+            <p className="text-label-caps text-ink-muted m-0">Plant it in the grow pot</p>
+            <p className="text-ink-muted mb-0 text-sm">
+              We ship in a plastic grow pot so nothing is crushed in transit and nothing is
+              over-packed. Decorate it yourself at home — it costs you less and it is the fun part.
             </p>
           </div>
 
           {/* ── Legal Metrology declarations, r.6(1) + r.6(10) ── */}
-          <section className="mt-lg rounded-md border border-border p-base">
-            <h2 className="my-0 text-label-caps text-ink-muted">
-              Product declarations
-            </h2>
-            <dl className="mb-0 grid grid-cols-[auto_1fr] gap-x-base gap-y-xs text-sm">
-              <dt className="m-0 text-ink-muted">Common name</dt>
+          <section className="mt-lg border-border p-base rounded-md border">
+            <h2 className="text-label-caps text-ink-muted my-0">Product declarations</h2>
+            <dl className="gap-x-base gap-y-xs mb-0 grid grid-cols-[auto_1fr] text-sm">
+              <dt className="text-ink-muted m-0">Common name</dt>
               <dd className="m-0">{item.legal.commonNameDeclared}</dd>
 
-              <dt className="m-0 text-ink-muted">Manufacturer</dt>
+              <dt className="text-ink-muted m-0">Manufacturer</dt>
               <dd className="m-0">
                 {item.legal.manufacturerName}
                 <br />
                 {item.legal.manufacturerAddress}
               </dd>
 
-              <dt className="m-0 text-ink-muted">Country of origin</dt>
+              <dt className="text-ink-muted m-0">Country of origin</dt>
               <dd className="m-0">{item.legal.countryOfOrigin}</dd>
 
-              <dt className="m-0 text-ink-muted">Net quantity</dt>
+              <dt className="text-ink-muted m-0">Net quantity</dt>
               <dd className="m-0">{item.legal.netQuantity}</dd>
 
-              <dt className="m-0 text-ink-muted">MRP (incl. all taxes)</dt>
+              <dt className="text-ink-muted m-0">MRP (incl. all taxes)</dt>
               <dd className="m-0">{formatPaise(item.legal.mrpPaise)}</dd>
 
               {item.legal.bestBefore && (
                 <>
-                  <dt className="m-0 text-ink-muted">Best before</dt>
+                  <dt className="text-ink-muted m-0">Best before</dt>
                   <dd className="m-0">{item.legal.bestBefore}</dd>
                 </>
               )}
 
               {item.legal.dimensions && (
                 <>
-                  <dt className="m-0 text-ink-muted">Dimensions (H × pot ⌀ × spread)</dt>
+                  <dt className="text-ink-muted m-0">Dimensions (H × pot ⌀ × spread)</dt>
                   <dd className="m-0">
-                    {item.legal.dimensions.heightCm} ×{' '}
-                    {item.legal.dimensions.potDiameterCm} ×{' '}
+                    {item.legal.dimensions.heightCm} × {item.legal.dimensions.potDiameterCm} ×{' '}
                     {item.legal.dimensions.spreadCm} cm
                   </dd>
                 </>
               )}
             </dl>
-            <p className="mb-0 mt-sm text-xs text-ink-muted">
+            <p className="mt-sm text-ink-muted mb-0 text-xs">
               Dimensions are measured at our packing bench with a caliper, against the batch record
-              for the exact plant you are buying. If we miss the declared size, that is on us and
-              we replace it.
+              for the exact plant you are buying. If we miss the declared size, that is on us and we
+              replace it.
             </p>
           </section>
         </div>
       </div>
 
       {siblings.length > 1 && (
-        <section className="mt-2xl border-t border-border pt-base">
+        <section className="mt-2xl border-border pt-base border-t">
           <h2 className="mt-0">Other sizes</h2>
           <p className="text-ink-muted">
-            A bigger plant costs more because it has been growing longer — not
-            because we marked it up.
+            A bigger plant costs more because it has been growing longer — not because we marked it
+            up.
           </p>
-          <ul className="flex list-none gap-sm p-0">
+          <ul className="gap-sm flex list-none p-0">
             {siblings.map((s) => (
               <li key={s.skuId}>
                 <Link
                   href={`/plant/${s.slug}?tier=${s.sizeTier}`}
-                  className={`block rounded-sm border px-base py-sm text-ink no-underline ${
+                  className={`px-base py-sm text-ink block rounded-sm border no-underline ${
                     s.sizeTier === item.sizeTier
                       ? 'border-primary bg-brand-soft'
                       : 'border-border hover:border-primary'
@@ -284,4 +305,22 @@ export default async function PlantPage({
       )}
     </main>
   )
+}
+
+/**
+ * Has the signed-in customer already saved this SKU?
+ *
+ * One indexed lookup, and `null` for a signed-out visitor so the button renders
+ * in its unsaved state and the sign-in prompt appears only when it is pressed —
+ * which is the whole point of not making it a gate.
+ */
+async function isSavedByCustomer(skuId: string): Promise<boolean> {
+  const customerId = await getCustomerId()
+  if (!customerId || !/^\d+$/.test(skuId)) return false
+
+  const { rowCount } = await getPool().query(
+    `SELECT 1 FROM "wishlists" WHERE "sku_id" = $1 AND "better_auth_user_id" = $2`,
+    [skuId, customerId],
+  )
+  return (rowCount ?? 0) > 0
 }

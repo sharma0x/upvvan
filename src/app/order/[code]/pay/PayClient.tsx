@@ -129,14 +129,14 @@ export default function PayClient({
 
       {declined && (
         <p className="text-ink-muted mt-sm mb-0 text-sm">
-          Your order is saved and your plant is still reserved. You can try again whenever you like —
-          nothing was charged.
+          Your order is saved and your plant is still reserved. You can try again whenever you like
+          — nothing was charged.
         </p>
       )}
 
       <p className="text-ink-muted mt-lg mb-0 text-sm">
-        Prepaid only. There is no cash-on-delivery option: a COD return takes 25–30 days and the plant
-        is unsellable by the time it comes back.
+        Prepaid only. There is no cash-on-delivery option: a COD return takes 25–30 days and the
+        plant is unsellable by the time it comes back.
       </p>
     </div>
   )

@@ -50,6 +50,51 @@ interface SpeciesSeed {
   heightCm: number
   potDiameterCm: number
   spreadCm: number
+
+  /**
+   * One line, the benefit, in our voice.
+   *
+   * Ugaoo's is "Designers' favourite statement plant" — a REASON, not a
+   * restatement of the name. "Money Plant" on a card tells a customer nothing;
+   * "Grows in almost any light and forgives a missed watering" tells them why
+   * this one.
+   */
+  summary: string
+
+  /**
+   * What actually arrives in the parcel, measured at the bench.
+   *
+   * THE most important string in this file. The single most-complained-about
+   * failure across every audited competitor is "the plant was smaller than the
+   * photo" — FNP customers report 3x3-inch pots against a declared 4x4, and
+   * Bloomscape's Trustpilot is dominated by "I don't think they have plants in
+   * the sizes they're selling them".
+   *
+   * A DB CHECK requires at least 40 characters, because a vague note ("a nice
+   * healthy plant") is worse than none: it occupies the field that was supposed
+   * to carry a measurement and reads as though we had nothing precise to say.
+   */
+  benchNote: string
+
+  /** Drives the kitchen-windowsill collection. */
+  edible: boolean
+  /** Drives the air-purifying collection. Deliberately NOT claimed broadly. */
+  airPurifying: boolean
+  vastuFriendly: boolean
+
+  /**
+   * The seven-field long-form care guide — LIGHT · WATER · HUMIDITY ·
+   * TEMPERATURE · FOOD · ADDITIONAL. Toxicity comes from `toxicity` above so
+   * the prose cannot contradict the safety filter.
+   */
+  careGuide: {
+    light: string
+    water: string
+    humidity: string
+    temperature: string
+    feeding: string
+    additional: string
+  }
 }
 
 const SPECIES: SpeciesSeed[] = [
@@ -70,6 +115,27 @@ const SPECIES: SpeciesSeed[] = [
     heightCm: 20,
     potDiameterCm: 10,
     spreadCm: 25,
+
+    summary: 'Grows in almost any light, and forgives a missed watering.',
+    benchNote:
+      'You receive a well-rooted vine in a 4-inch grow pot, roughly 20 cm of trailing growth with at least six leaves. It is a starter plant, not a mature hanging basket — if you want it on a shelf rather than a desk, ask us for the MD size.',
+    edible: false,
+    airPurifying: true,
+    vastuFriendly: true,
+    careGuide: {
+      light:
+        'Happy in almost anything from a dim corner to a bright room, and it grows faster the more light it gets. Direct midday sun through glass will scorch the leaves, which is why we list it as tolerant rather than demanding.',
+      water:
+        'Water when the top 40% of the soil feels dry — push a finger two knuckles in and if it comes out clean, wait. Do not use a calendar. It stores nothing, so unlike the ZZ plant it does not forgive a month of neglect; a forgotten fortnight in a plastic pot will show as yellow leaves at the bottom.',
+      humidity:
+        'Ordinary Indian indoor humidity is fine. It will do better with more, and it will tolerate less.',
+      temperature:
+        'Comfortable anywhere from about 15°C to 35°C. Above 38°C on a west-facing ledge for a whole afternoon it will tip.',
+      feeding:
+        'Once a month through spring and summer with any balanced liquid feed. Nothing at all in winter — it is barely growing, and feeding a resting plant is how you burn its roots.',
+      additional:
+        'Pinch the growing tip to make it bushy rather than long. Wipe the leaves monthly — dust on a broad leaf is the main thing that makes an otherwise healthy plant look neglected.',
+    },
   },
   {
     slug: 'snake-plant',
@@ -88,6 +154,27 @@ const SPECIES: SpeciesSeed[] = [
     heightCm: 35,
     potDiameterCm: 12,
     spreadCm: 18,
+
+    summary:
+      'Survives three weeks of forgetting. The right plant if you are not disciplined about watering.',
+    benchNote:
+      'You receive an upright specimen with five or more stiff, variegated blades, 30–40 cm tall in a 5-inch grow pot. These do not branch — one clump, several blades. Height varies leaf by leaf and 40 cm is a ceiling, not a promise.',
+    edible: false,
+    airPurifying: true,
+    vastuFriendly: true,
+    careGuide: {
+      light:
+        'Genuinely tolerant of everything from a windowless hallway to a bright room. It will grow faster in bright indirect light, and it is one of the few plants that will not eventually die in low light — it will just stop growing.',
+      water:
+        'The most over-watered plant in the world, and the reason most people kill one. Let the soil dry out COMPLETELY — all of it, not the top half — and then wait another two weeks. You are looking at three weeks between waterings in an Indian summer and six in winter.',
+      humidity: 'None needed. Normal indoor air is fine.',
+      temperature:
+        'Tolerates from about 10°C to 38°C, which makes it one of the few things on this site that genuinely does not mind a Bengaluru April.',
+      feeding:
+        'Twice a year at most, in spring. Feeding a snake plant is close to a waste of money and more likely to damage it than help it.',
+      additional:
+        'Nothing. Do not repot unless the roots are visibly bursting out of the pot. Do not water on a schedule. The only maintenance job it has is being left alone.',
+    },
   },
   {
     slug: 'zz-plant',
@@ -106,6 +193,27 @@ const SPECIES: SpeciesSeed[] = [
     heightCm: 40,
     potDiameterCm: 14,
     spreadCm: 25,
+
+    summary: 'Stores water in its rhizomes, so it wilts later than anything else we sell.',
+    benchNote:
+      'You receive a clump of 4–6 stems with glossy leaves, 35–45 cm of upright growth in a 6-inch grow pot. Leaf count varies between plants and 4 is a normal plant, not a damaged one.',
+    edible: false,
+    airPurifying: true,
+    vastuFriendly: true,
+    careGuide: {
+      light:
+        'One of the very few plants that is genuinely happy in a dim corridor. More light makes faster growth; none will not kill it. This is the single best recommendation we have for a windowless room.',
+      water:
+        'Same rule as the snake plant, for the same reason — the rhizomes hold water. Let it dry out completely. If the leaves are upright, it does not need water, whatever the calendar says.',
+      humidity:
+        'Prefers higher humidity than a dry Indian room in winter. A mug of water with pebbles under the pot, or a tray of water nearby, is genuinely useful from November to February.',
+      temperature:
+        "15°C to 30°C. Below about 12°C the leaves blacken from the tips down, which is the usual reason people conclude they have 'killed' a ZZ plant.",
+      feeding:
+        'Once or twice a year. It grows slowly by design, and more fertiliser does not make it faster — it makes the leaves curl.',
+      additional:
+        'Dust the leaves, which are broad and glossy and show everything. Never repot into a pot more than a size larger; a big pot of wet soil is how you kill one.',
+    },
   },
   {
     slug: 'jade-plant',
@@ -124,6 +232,26 @@ const SPECIES: SpeciesSeed[] = [
     heightCm: 25,
     potDiameterCm: 12,
     spreadCm: 20,
+
+    summary: 'A small tree that outlives its owner. Give it sun and let the soil dry fully.',
+    benchNote:
+      'You receive a single-stemmed plant with 12–18 leaves, roughly 20–30 cm tall in a 4-inch terracotta-coloured grow pot. New leaves at the top are bright red when stressed by sun — that is normal, not damage.',
+    edible: false,
+    airPurifying: false,
+    vastuFriendly: true,
+    careGuide: {
+      light:
+        'Wants the most light we can honestly offer indoors: a bright window, and four to six hours of sun if you have one. Unlike the other plants here, this one is actively harmed by a dim room — it will stretch, go leggy and lose its compact shape.',
+      water:
+        'Let it dry out completely, including the bottom of the pot. This is a succulent and treats excess water as a threat rather than a resource. In a Bengaluru winter it may need water once a month.',
+      humidity: 'No requirement at all. Ordinary dry indoor air is fine.',
+      temperature:
+        '15°C to 32°C. Frost will kill it, which matters if you put it on a balcony in December.',
+      feeding:
+        'Once in spring with a low-nitrogen feed. High nitrogen produces soft, sappy growth that snaps, which is a common jade complaint.',
+      additional:
+        'Rotate the pot a quarter-turn monthly so it grows evenly rather than leaning at the window. Prune only to shape; the thick trunk is the plant.',
+    },
   },
   {
     slug: 'peace-lily',
@@ -143,6 +271,27 @@ const SPECIES: SpeciesSeed[] = [
     heightCm: 45,
     potDiameterCm: 15,
     spreadCm: 30,
+
+    summary: 'Droops when it is thirsty and recovers within hours — the most honest plant we sell.',
+    benchNote:
+      'You receive a flowering-size plant with 6–10 white blooms or buds, 40–50 cm of foliage in a 6-inch pot. Peace lilies are sold in flower deliberately, because the flower is how you can tell a healthy one from a stressed one. It is NOT in our summer catalogue — see the seasonal note.',
+    edible: false,
+    airPurifying: true,
+    vastuFriendly: true,
+    careGuide: {
+      light:
+        "Bright indirect light, and it will flower well there. It survives low light for months but will not flower in it, which is the usual complaint about a peace lily that 'has no flowers'.",
+      water:
+        'This is the one plant here where watering on a schedule works, because it gives you the signal: the leaves droop visibly within a day or two of running dry and stand back up within hours of a drink. Water when the top 50% is dry and stop when water runs out of the drainage hole, then empty the saucer.',
+      humidity:
+        'Wants good humidity. In a dry air-conditioned Bengaluru office it will brown at the leaf tips; a pebble tray genuinely helps.',
+      temperature:
+        '18°C to 30°C. It is the most heat-sensitive plant we sell and drops its flowers above about 32°C, which is why it comes out of the catalogue for March to June.',
+      feeding:
+        'Once a month in spring and summer, at half strength. Pale, dry, crispy leaves are usually over-feeding, not under-feeding.',
+      additional:
+        'Remove spent flowers at the stem so it does not put energy into seed. Wipe the leaves — it shows dust more than any other plant here.',
+    },
   },
   {
     slug: 'tulsi',
@@ -161,16 +310,66 @@ const SPECIES: SpeciesSeed[] = [
     heightCm: 30,
     potDiameterCm: 10,
     spreadCm: 18,
+
+    summary: 'The one plant every Indian kitchen already has a place for.',
+    benchNote:
+      'You receive a bushy plant with two or three stems, 25–35 cm tall, already established and flowering at the tip. Tulsi is fast and forgiving: a pinch of the top makes it twice as bushy within a fortnight, so the plant you receive is smaller than it will be in a month. That is the plant working, not a short shipment.',
+    edible: true,
+    airPurifying: false,
+    vastuFriendly: true,
+    careGuide: {
+      light:
+        'Needs direct sun — three hours is a minimum, and six is better. This is the only plant on this site that genuinely wants to be outdoors in a balcony or on a south or west ledge. It will not last indoors for long.',
+      water:
+        'Damp, not dry. Water when the top 2 cm feels dry, which in a hot balcony in April can be every other day. Unlike every other plant here, tulsi does not tolerate drying out.',
+      humidity: 'Indifferent. It grows in Bengaluru monsoon humidity without complaint.',
+      temperature:
+        '18°C to 36°C. Hardier than it looks; it is the reason Indian households have kept one for centuries.',
+      feeding:
+        'A little every two weeks through the growing season. It is a herb, not an ornamental — feeding it is how you get leaves rather than flowers.',
+      additional:
+        'Pinch the flower buds regularly to keep it leafy, and take a cutting in the monsoon to replace the parent rather than buying a new plant. That is how every Indian kitchen has ever propagated it.',
+    },
   },
 ]
 
 /** Planters. Uplift is bounded to the proven band (29%–121%) and validated in SQL. */
 const PLANTERS = [
-  { name: 'Grow pot — decorate on arrival', upliftBp: 0, costPaise: 2000, material: 'plastic', colour: 'black' },
-  { name: 'Coir-wrapped terracotta', upliftBp: 4500, costPaise: 8500, material: 'terracotta', colour: 'terracotta' },
-  { name: 'Unglazed ceramic, matte white', upliftBp: 6000, costPaise: 12000, material: 'ceramic', colour: 'white' },
-  { name: 'Handmade stoneware, sage glaze', upliftBp: 8500, costPaise: 18500, material: 'stoneware', colour: 'sage' },
-  { name: 'Studio planter, high-gloss charcoal', upliftBp: 12100, costPaise: 28000, material: 'stoneware', colour: 'charcoal' },
+  {
+    name: 'Grow pot — decorate on arrival',
+    upliftBp: 0,
+    costPaise: 2000,
+    material: 'plastic',
+    colour: 'black',
+  },
+  {
+    name: 'Coir-wrapped terracotta',
+    upliftBp: 4500,
+    costPaise: 8500,
+    material: 'terracotta',
+    colour: 'terracotta',
+  },
+  {
+    name: 'Unglazed ceramic, matte white',
+    upliftBp: 6000,
+    costPaise: 12000,
+    material: 'ceramic',
+    colour: 'white',
+  },
+  {
+    name: 'Handmade stoneware, sage glaze',
+    upliftBp: 8500,
+    costPaise: 18500,
+    material: 'stoneware',
+    colour: 'sage',
+  },
+  {
+    name: 'Studio planter, high-gloss charcoal',
+    upliftBp: 12100,
+    costPaise: 28000,
+    material: 'stoneware',
+    colour: 'charcoal',
+  },
 ]
 
 async function main() {
@@ -198,20 +397,41 @@ async function main() {
 
     for (const s of SPECIES) {
       const res = await client.query<{ id: number }>(
-        `INSERT INTO species (common_name, slug, botanical_name, description,
+        `INSERT INTO species (common_name, slug, botanical_name, description, summary, bench_note,
                               care_light, care_water_interval_days,
                               care_soil_moisture_target_pct, care_difficulty, care_toxicity,
+                              toxicity_witnessed_at,
+                              edible, air_purifying, vastu_friendly,
+                              care_guide_light, care_guide_water, care_guide_humidity,
+                              care_guide_temperature, care_guide_feeding, care_guide_additional,
                               updated_at, created_at)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9, now(), now())
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,
+                 -- $11 is reused here as an enum literal AND as a column value,
+                 -- and Postgres refuses to deduce one type for both. $21 carries
+                 -- the same value as text, which the CASE can compare against.
+                 CASE WHEN $21::text = 'safe' THEN now() ELSE NULL END,
+                 $12,$13,$14,$15,$16,$17,$18,$19,$20, now(), now())
          ON CONFLICT (slug) DO UPDATE
            SET common_name = EXCLUDED.common_name,
                botanical_name = EXCLUDED.botanical_name,
                description = EXCLUDED.description,
+               summary = EXCLUDED.summary,
+               bench_note = EXCLUDED.bench_note,
                care_light = EXCLUDED.care_light,
                care_water_interval_days = EXCLUDED.care_water_interval_days,
                care_soil_moisture_target_pct = EXCLUDED.care_soil_moisture_target_pct,
                care_difficulty = EXCLUDED.care_difficulty,
                care_toxicity = EXCLUDED.care_toxicity,
+               toxicity_witnessed_at = EXCLUDED.toxicity_witnessed_at,
+               edible = EXCLUDED.edible,
+               air_purifying = EXCLUDED.air_purifying,
+               vastu_friendly = EXCLUDED.vastu_friendly,
+               care_guide_light = EXCLUDED.care_guide_light,
+               care_guide_water = EXCLUDED.care_guide_water,
+               care_guide_humidity = EXCLUDED.care_guide_humidity,
+               care_guide_temperature = EXCLUDED.care_guide_temperature,
+               care_guide_feeding = EXCLUDED.care_guide_feeding,
+               care_guide_additional = EXCLUDED.care_guide_additional,
                updated_at = now()
          RETURNING id`,
         [
@@ -219,10 +439,22 @@ async function main() {
           s.slug,
           s.botanicalName,
           s.description,
+          s.summary,
+          s.benchNote,
           s.light,
           s.waterIntervalDays,
           s.soilMoistureTargetPct,
           s.difficulty,
+          s.toxicity,
+          s.edible,
+          s.airPurifying,
+          s.vastuFriendly,
+          s.careGuide.light,
+          s.careGuide.water,
+          s.careGuide.humidity,
+          s.careGuide.temperature,
+          s.careGuide.feeding,
+          s.careGuide.additional,
           s.toxicity,
         ],
       )
@@ -368,30 +600,47 @@ async function main() {
     // meaningful dimension, and faking one to satisfy a schema would be worse
     // than the null. The plant rows above carry all three.
     const CONSUMABLES = [
+      /*
+       * Consumables carry a DESCRIPTION because the card renders it, and a rail of
+       * three bare names with a price is not a merchandising decision — it is a
+       * receipt. Each description says what it is FOR, which is the only reason
+       * someone buys soil from a nursery rather than a hardware shop.
+       *
+       * They are also the highest-margin line in the business: a 5kg bag ships at
+       * the same courier rate as a 5ft plant, has no mortality, cannot generate a
+       * return leg, and a customer who buys one is demonstrably already gardening.
+       * Both TrustBasket and Paudhewale quietly became supplies businesses.
+       */
       {
         code: 'SOIL-COCOPEAT-5KG',
         name: 'Cocopeat planting medium',
         net: '5 kg',
         pricePaise: 24900,
+        description:
+          'What we pot in ourselves. Holds moisture without going sour, and it is the medium every plant on this site arrives in — so repotting into it changes nothing about how your plant behaves.',
       },
       {
         code: 'SOIL-POTMIX-5KG',
         name: 'All-purpose pot mix',
         net: '5 kg',
         pricePaise: 21900,
+        description:
+          'Cocopeat, perlite and vermiculite, mixed. Use it when you are repotting an indoor plant that has been in the same soil for more than two years, or any time the old soil has gone hard and drains slowly.',
       },
       {
         code: 'FERTILIZER-ORGANIC-1KG',
         name: 'Organic plant food',
         net: '1 kg',
         pricePaise: 34900,
+        description:
+          'A dry organic feed, diluted as the label says. Feed through spring and summer, never in winter, and never more often than every two weeks — over-feeding is the most common way we get told a plant is dying.',
       },
     ]
 
     for (const c of CONSUMABLES) {
       await client.query(
         `INSERT INTO skus (sku_code, species_id, city_id, size_tier, item_class,
-                           base_price_paise,
+                           description, base_price_paise,
                            legal_metrology_manufacturer_name,
                            legal_metrology_manufacturer_address,
                            legal_metrology_country_of_origin,
@@ -403,18 +652,36 @@ async function main() {
                            legal_metrology_dimensions_spread_cm,
                            batch_id, bench_photo_url, is_published,
                            updated_at, created_at)
-         VALUES ($1, NULL, $2, 'XS', 'consumable', $3,
+         VALUES ($1, NULL, $2, 'XS', 'consumable', $8, $3,
                  'Upvvan Nursery Pvt Ltd',
                  '12 Garden Road, Bengaluru, Karnataka 560001',
                  'India', $4, $5, $6, NULL, NULL, NULL,
                  $7, NULL, true, now(), now())
          ON CONFLICT (sku_code) DO UPDATE
-           SET base_price_paise = EXCLUDED.base_price_paise,
+           SET description = EXCLUDED.description,
+               base_price_paise = EXCLUDED.base_price_paise,
                legal_metrology_mrp_paise = EXCLUDED.legal_metrology_mrp_paise,
                updated_at = now()`,
-        [c.code, cityId, c.pricePaise, c.name, c.net, c.pricePaise, batchId],
+        [c.code, cityId, c.pricePaise, c.name, c.net, c.pricePaise, batchId, c.description],
       )
       skuCount++
+
+      /*
+       * `sku_stock` rows for consumables.
+       *
+       * The loader LEFT-JOINs stock and COALESCEs a missing row to 0 — so a
+       * consumable with no stock row renders as "Sold out" and refuses to be
+       * added to a cart. That is the correct behaviour for a missing row, which
+       * is exactly why the seed has to write one. Stock is enforced at checkout
+       * too, so a consumable with no row could be paid for and only then be
+       * rejected at the bench.
+       */
+      await client.query(
+        `INSERT INTO sku_stock (sku_id, stock_on_hand, updated_at, created_at)
+         SELECT id, 200, now(), now() FROM skus WHERE sku_code = $1
+         ON CONFLICT (sku_id) DO NOTHING`,
+        [c.code],
+      )
     }
 
     await client.query('COMMIT')
@@ -422,7 +689,9 @@ async function main() {
     console.log('✓ Catalogue seeded')
     console.log(`  ${SPECIES.length} species · ${PLANTERS.length} planters · ${skuCount} SKUs`)
     console.log('  Guarantee tier T0 (48h) · all SKUs traceable to BATCH-2026-0001')
-    console.log(`  ${SPECIES.filter((s) => s.hardy).length}/${SPECIES.length} hardy for the summer window`)
+    console.log(
+      `  ${SPECIES.filter((s) => s.hardy).length}/${SPECIES.length} hardy for the summer window`,
+    )
   } catch (err) {
     await client.query('ROLLBACK')
     console.error('✗ Catalogue seed failed:', (err as Error).message)

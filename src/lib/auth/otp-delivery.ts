@@ -84,7 +84,13 @@ function getTransport(): nodemailer.Transporter {
  * exists at all — before it, the code only reached a terminal nobody was
  * watching. Now it reaches both.
  */
-export async function deliverOtp({ phoneNumber, code }: { phoneNumber: string; code: string }): Promise<void> {
+export async function deliverOtp({
+  phoneNumber,
+  code,
+}: {
+  phoneNumber: string
+  code: string
+}): Promise<void> {
   // Kept from the original implementation. See above: this is a deliberate
   // belt-and-braces affordance for local development, not a leftover.
   console.log(`[auth] OTP for ${phoneNumber}: ${code}`)

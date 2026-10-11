@@ -52,7 +52,10 @@ const INVARIANTS = path.join(ROOT, 'src/lib/dispatch/schema.sql')
 function generatedColumns(table: string): Set<string> {
   const source = readFileSync(GENERATED, 'utf8')
   const start = source.indexOf(`export const ${table} = pgTable(`)
-  expect(start, `${table} not found in payload-generated-schema.ts — run \`pnpm payload generate:db-schema\``).toBeGreaterThan(-1)
+  expect(
+    start,
+    `${table} not found in payload-generated-schema.ts — run \`pnpm payload generate:db-schema\``,
+  ).toBeGreaterThan(-1)
 
   const body = source.slice(start, source.indexOf('\n)', start))
   const columns = new Set<string>()
@@ -114,9 +117,7 @@ describe('generated DDL vs hand-written invariants', () => {
 
       // Columns with a Payload default that the invariants legitimately omit.
       const IGNORED = new Set(['updated_at', 'created_at'])
-      const unexpected = [...generated]
-        .filter((c) => !referenced.has(c) && !IGNORED.has(c))
-        .sort()
+      const unexpected = [...generated].filter((c) => !referenced.has(c) && !IGNORED.has(c)).sort()
 
       expect(
         unexpected,

@@ -23,10 +23,10 @@ export default async function AddressesPage() {
 
   return (
     <main>
-      <h2 className="mt-0 mb-xs">Addresses</h2>
+      <h2 className="mb-xs mt-0">Addresses</h2>
       <p className="text-ink-muted mt-0">
-        Your rider calls this number on arrival. We deliver to serviceable
-        pincodes only — check yours on the home page if you are unsure.
+        Your rider calls this number on arrival. We deliver to serviceable pincodes only — check
+        yours on the home page if you are unsure.
       </p>
 
       <AddressBook addresses={addresses} />

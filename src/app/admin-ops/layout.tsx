@@ -38,7 +38,7 @@ export const metadata: Metadata = {
 
 export default function AdminOpsLayout({ children }: { children: React.ReactNode }) {
   return (
-    <div className="min-h-screen bg-surface">
+    <div className="bg-surface min-h-screen">
       {/*
         A landmark and a skip link. The console is dense and keyboard-driven, and
         a screen-reader user tabbing through 60 table rows to reach the nav has to
@@ -46,13 +46,13 @@ export default function AdminOpsLayout({ children }: { children: React.ReactNode
       */}
       <a
         href="#ops-main"
-        className="sr-only focus:not-sr-only focus:absolute focus:top-sm focus:left-sm focus:z-50 focus:rounded-sm focus:bg-primary focus:px-base focus:py-sm focus:text-surface-card"
+        className="focus:top-sm focus:left-sm focus:bg-primary focus:px-base focus:py-sm focus:text-surface-card sr-only focus:not-sr-only focus:absolute focus:z-50 focus:rounded-sm"
       >
         Skip to console
       </a>
 
-      <header className="border-b border-border bg-surface-raised">
-        <div className="mx-auto flex max-w-[1120px] flex-wrap items-baseline gap-base px-base py-base">
+      <header className="border-border bg-surface-raised border-b">
+        <div className="gap-base px-base py-base mx-auto flex max-w-[1120px] flex-wrap items-baseline">
           <p className="text-label-caps text-clay m-0">Upvvan operations</p>
           {/*
             `py-sm` on every nav link rather than padding the <nav>: the links are
@@ -60,36 +60,56 @@ export default function AdminOpsLayout({ children }: { children: React.ReactNode
             44px minimum is the reason this console is usable on a phone — an
             operator running a shift is often holding a phone one-handed.
           */}
-          <nav aria-label="Ops sections" className="-my-sm flex flex-wrap gap-base">
+          <nav aria-label="Ops sections" className="-my-sm gap-base flex flex-wrap">
             <a
               href="/admin-ops"
-              className="flex min-h-[44px] items-center text-sm text-ink underline-offset-4 hover:underline"
+              className="text-ink flex min-h-[44px] items-center text-sm underline-offset-4 hover:underline"
             >
               Today
             </a>
             <a
               href="/admin-ops/queue"
-              className="flex min-h-[44px] items-center text-sm text-ink underline-offset-4 hover:underline"
+              className="text-ink flex min-h-[44px] items-center text-sm underline-offset-4 hover:underline"
             >
               Queue
             </a>
             <a
               href="/admin-ops/board"
-              className="flex min-h-[44px] items-center text-sm text-ink underline-offset-4 hover:underline"
+              className="text-ink flex min-h-[44px] items-center text-sm underline-offset-4 hover:underline"
             >
               Dispatch board
+            </a>
+            {/*
+              Claims is a NAV ITEM rather than a link from the dashboard tile.
+
+              The dashboard's "Claims open" number used to link to the dispatch
+              board — a page that renders `dispatch.status` only and never reads
+              `dispatch.orderStatus`. So the number was real and the destination
+              could not answer it. A tile that links somewhere the question cannot
+              be answered is worse than no tile: it teaches an operator that the
+              number is not worth clicking.
+
+              Claims needed a page where the decision can actually be made, so it
+              needed to be somewhere an operator would look. See
+              `/admin-ops/claims`.
+            */}
+            <a
+              href="/admin-ops/claims"
+              className="text-ink flex min-h-[44px] items-center text-sm underline-offset-4 hover:underline"
+            >
+              Claims
             </a>
           </nav>
           <a
             href="/rider"
-            className="flex min-h-[44px] items-center text-sm text-ink-muted ml-auto underline-offset-4 hover:underline"
+            className="text-ink-muted ml-auto flex min-h-[44px] items-center text-sm underline-offset-4 hover:underline"
           >
             Rider view
           </a>
         </div>
       </header>
 
-      <main id="ops-main" className="mx-auto max-w-[1120px] px-base py-xl">
+      <main id="ops-main" className="px-base py-xl mx-auto max-w-[1120px]">
         {children}
       </main>
     </div>

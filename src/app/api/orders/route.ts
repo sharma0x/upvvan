@@ -1,9 +1,25 @@
 import { NextResponse } from 'next/server'
 import { Pool } from 'pg'
 
-import { appendEvent, databaseOrderStatuses, db, newOrderCode, normalisePhone } from '@/lib/orders/db'
+import {
+  appendEvent,
+  databaseOrderStatuses,
+  db,
+  newOrderCode,
+  normalisePhone,
+} from '@/lib/orders/db'
 import { OversellError, decrementStock, ensureStockRow } from '@/lib/orders/stock'
-import { missingEnumValueError, supportsDatabaseStatus, type OrderStatus } from '@/lib/orders/status'
+import {
+  missingEnumValueError,
+  supportsDatabaseStatus,
+  type OrderStatus,
+} from '@/lib/orders/status'
+import { loadBusinessSettings } from '@/lib/settings/server'
+import { sendEmail } from '@/lib/email/send'
+import { customerMailbox } from '@/lib/email/address'
+import { adminNewOrder, orderConfirmation } from '@/lib/email/templates'
+import { getCustomerId } from '@/lib/auth/session'
+import { config } from '@/lib/config'
 
 /**
  * POST /api/orders — place a prepaid order.
@@ -123,7 +139,10 @@ export async function POST(request: Request): Promise<NextResponse> {
     )
   }
   if (!addressLine1) {
-    return NextResponse.json({ message: 'Enter the flat or house details for delivery.' }, { status: 400 })
+    return NextResponse.json(
+      { message: 'Enter the flat or house details for delivery.' },
+      { status: 400 },
+    )
   }
 
   /*
@@ -155,6 +174,25 @@ export async function POST(request: Request): Promise<NextResponse> {
       }
     }
   }
+
+  /*
+   * ── WHO THIS ORDER BELONGS TO ─────────────────────────────────────────────
+   *
+   * `customer_id` is better-auth's user id, read from the SESSION and never from
+   * the request body. It is NULL for a guest, which is correct and expected:
+   * guest checkout is this store's default, not a degraded mode.
+   *
+   * It was omitted entirely before, which is the single worst bug in the account
+   * area. `/account` filters on `customer_id`, so EVERY order placed without this
+   * line was invisible to the person who placed it — 74 of 75 rows in the
+   * database carried a NULL. A customer who signed in after checking out, or who
+   * was signed in the whole time, opened their own account and saw
+   * "No orders yet".
+   *
+   * Writing it here is the fix; `adoptGuestOrders()` in
+   * `lib/accounts/profile.ts` closes the gap for orders placed before it landed.
+   */
+  const customerId = await getCustomerId()
 
   const pool: Pool = db()
 
@@ -198,7 +236,22 @@ export async function POST(request: Request): Promise<NextResponse> {
 
   // ── 2 · re-derive prices; ignore the client total ──────────────────────
   let revenuePaise = 0
-  const resolved: Array<{ skuId: string; pricePaise: number; planterId: string | null }> = []
+  const resolved: Array<{
+    skuId: string
+    pricePaise: number
+    planterId: string | null
+    /**
+     * Resolved DURING pricing, not looked up afterwards.
+     *
+     * The order has to be described in the confirmation e-mail, and a separate
+     * round trip after COMMIT would be a second thing that can fail after the
+     * money has moved — the same category of bug as sending mail from inside the
+     * transaction. Three extra columns on a local array, zero extra queries.
+     */
+    name: string
+    variant: string
+    quantity: number
+  }> = []
 
   for (const line of lines) {
     const sku = await pool.query<{
@@ -208,9 +261,15 @@ export async function POST(request: Request): Promise<NextResponse> {
       item_class: string
       is_published: boolean
       city_id: number
+      display_name: string
     }>(
-      `SELECT "id", "base_price_paise", "size_tier", "item_class", "is_published", "city_id"
-         FROM "skus" WHERE "id" = $1`,
+      `SELECT k."id", k."base_price_paise", k."size_tier", k."item_class",
+              k."is_published", k."city_id",
+              COALESCE(NULLIF(sp."common_name", ''), NULLIF(btrim(k."description"), ''), k."sku_code")
+                AS display_name
+         FROM "skus" k
+         LEFT JOIN "species" sp ON sp."id" = k."species_id"
+        WHERE k."id" = $1`,
       [line.skuId],
     )
     const row = sku.rows[0]
@@ -232,10 +291,16 @@ export async function POST(request: Request): Promise<NextResponse> {
       (row.base_price_paise * (10_000 + (SIZE_TIER_MULTIPLIER[row.size_tier] ?? 0))) / 10_000,
     )
 
+    // Human-readable variant for the confirmation e-mail: the pot is a real
+    // difference the customer paid for, and "MD size" alone would under-describe
+    // what is arriving in the box.
+    const variant = row.size_tier === 'XS' ? '' : `${row.size_tier} size`
+
     let pricePaise = tierPrice
+    let potName = ''
     if (line.planterId) {
-      const pot = await pool.query<{ uplift_bp: number; is_active: boolean }>(
-        `SELECT "uplift_bp", "is_active" FROM "planters" WHERE "id" = $1`,
+      const pot = await pool.query<{ uplift_bp: number; is_active: boolean; name: string }>(
+        `SELECT "uplift_bp", "is_active", "name" FROM "planters" WHERE "id" = $1`,
         [line.planterId],
       )
 
@@ -264,10 +329,27 @@ export async function POST(request: Request): Promise<NextResponse> {
       }
 
       pricePaise = tierPrice + Math.ceil((tierPrice * pot.rows[0].uplift_bp) / 10_000)
+      potName = pot.rows[0].name
     }
 
     revenuePaise += pricePaise
-    resolved.push({ skuId: line.skuId, pricePaise, planterId: line.planterId })
+    resolved.push({
+      skuId: line.skuId,
+      pricePaise,
+      planterId: line.planterId,
+      name: row.display_name,
+      variant: line.planterId && potName ? [variant, potName].filter(Boolean).join(' · ') : variant,
+      // Always 1, and deliberately typed as a literal rather than read from a
+      // field that does not exist.
+      //
+      // `OrderLine` has no quantity: the cart emits one line PER UNIT and the
+      // stock decrement is hardcoded to `qty: 1`, because a two-quantity line
+      // would need the decrement, the oversell check and the order_items id
+      // scheme to agree about it. Reading a `line.quantity` that is always
+      // undefined would print "Qty undefined" in a customer e-mail and look
+      // like a data bug rather than a simplification.
+      quantity: 1,
+    })
   }
 
   // ── 3 · create the order — PREPAID, UNPAID, WITH STOCK RESERVED ──────────
@@ -289,13 +371,13 @@ export async function POST(request: Request): Promise<NextResponse> {
       order = await client.query<{ id: number; order_code: string }>(
         `INSERT INTO orders (order_code, city_id, status, payment_mode, pincode,
                              zone_id, revenue_paise, contribution_paise,
-                             customer_name, customer_phone,
+                             customer_id, customer_name, customer_phone,
                              address_line1, address_line2, address_landmark,
                              address_city, address_state,
                              payment_state,
                              updated_at, created_at)
          VALUES ($1, $2, 'PAYMENT_PENDING', 'prepaid', $3, $4, $5, $6,
-                 $7, $8, $9, $10, $11, $12, $13, 'created',
+                 $7, $8, $9, $10, $11, $12, $13, $14, 'created',
                  now(), now())
          RETURNING "id", "order_code"`,
         [
@@ -307,6 +389,9 @@ export async function POST(request: Request): Promise<NextResponse> {
           // Conservative 25% until the real COGS lands; the city P&L view groups
           // on this and a losing city must be visible as losing.
           Math.round(revenuePaise * 0.25),
+          // See the note above the declaration. NULL for a guest, which is
+          // correct: guest checkout is not a degraded mode, it is the default.
+          customerId,
           customerName,
           customerPhone,
           addressLine1,
@@ -323,13 +408,13 @@ export async function POST(request: Request): Promise<NextResponse> {
       order = await client.query<{ id: number; order_code: string }>(
         `INSERT INTO orders (order_code, city_id, status, payment_mode, pincode,
                              zone_id, revenue_paise, contribution_paise,
-                             customer_name, customer_phone,
+                             customer_id, customer_name, customer_phone,
                              address_line1, address_line2, address_landmark,
                              address_city, address_state,
                              payment_state,
                              updated_at, created_at)
          VALUES ($1, $2, 'PAYMENT_PENDING', 'prepaid', $3, $4, $5, $6,
-                 $7, $8, $9, $10, $11, $12, $13, 'created',
+                 $7, $8, $9, $10, $11, $12, $13, $14, 'created',
                  now(), now())
          RETURNING "id", "order_code"`,
         [
@@ -339,6 +424,9 @@ export async function POST(request: Request): Promise<NextResponse> {
           pin.rows[0]!.zone_id,
           revenuePaise,
           Math.round(revenuePaise * 0.25),
+          // See the note above the declaration. NULL for a guest, which is
+          // correct: guest checkout is not a degraded mode, it is the default.
+          customerId,
           customerName,
           customerPhone,
           addressLine1,
@@ -369,7 +457,14 @@ export async function POST(request: Request): Promise<NextResponse> {
         // against, which is why it has to be derivable.
         `INSERT INTO orders_items (id, _order, _parent_id, sku_id, price_paise, planter_id)
          VALUES ($1, $2, $3, $4, $5, $6)`,
-        [`${order.rows[0]!.order_code}-${i + 1}`, i, orderId, line.skuId, line.pricePaise, line.planterId ?? null],
+        [
+          `${order.rows[0]!.order_code}-${i + 1}`,
+          i,
+          orderId,
+          line.skuId,
+          line.pricePaise,
+          line.planterId ?? null,
+        ],
       )
     }
 
@@ -397,6 +492,55 @@ export async function POST(request: Request): Promise<NextResponse> {
     })
 
     await client.query('COMMIT')
+
+    /*
+     * ── NOTIFY, AFTER THE COMMIT, NEVER INSIDE IT ─────────────────────────
+     *
+     * This is the single most important placement decision in the file.
+     *
+     * Sending inside the transaction would mean holding a row lock and an open
+     * connection across an SMTP round trip — a several-second stall on a table
+     * that checkout also writes to, caused by an external service we do not
+     * control. And if the send failed and threw, the transaction would roll back
+     * an order whose money had already been captured.
+     *
+     * After the commit, in the background, with no await: the order exists
+     * regardless of what the mail server does, and a response that waits on SMTP
+     * is a response whose latency the customer pays for.
+     *
+     * `sendEmailInBackground` never rejects, so there is no unhandled rejection
+     * to crash the process either.
+     */
+    void notifyOrderPlaced({
+      orderCode: order.rows[0]!.order_code,
+      customerName,
+      customerPhone,
+      addressLines: [
+        addressLine1,
+        addressLine2,
+        addressLandmark,
+        [addressCity, addressState].filter(Boolean).join(', '),
+        pincode,
+      ].filter((l): l is string => Boolean(l && l.trim() !== '')),
+      cityName: (await cityNameFor(pin.rows[0]!.city_id)) ?? '',
+      lines: resolved.map((line) => ({
+        name: line.name,
+        variant: line.variant,
+        quantity: line.quantity,
+        linePaise: line.pricePaise,
+      })),
+      subtotalPaise: revenuePaise,
+      // Delivery is free above the city's threshold and the threshold is 0 at
+      // launch, so this is 0 for every real order. It is still passed through
+      // rather than assumed, because a launch in a city with a paid threshold
+      // would otherwise show "Free" on a paid invoice.
+      deliveryPaise: 0,
+      totalPaise: revenuePaise,
+    }).catch((err: unknown) => {
+      // Belt and braces: `notifyOrderPlaced` is written not to throw, and this
+      // catches a bug in the templates rather than a mail outage.
+      console.error('[orders] order notification failed:', err)
+    })
 
     return NextResponse.json({
       orderCode: order.rows[0]!.order_code,
@@ -448,10 +592,10 @@ export async function POST(request: Request): Promise<NextResponse> {
             : raw.includes('not licensed')
               ? 'We are not open in your city yet.'
               : raw.includes('sku_stock')
-              ? 'An item in your cart is no longer available in the quantity requested.'
-              : raw.includes('orders_phone_is_a_mobile')
-                ? 'Enter a 10-digit mobile number for delivery updates.'
-                : 'Please check the delivery details and try again.'
+                ? 'An item in your cart is no longer available in the quantity requested.'
+                : raw.includes('orders_phone_is_a_mobile')
+                  ? 'Enter a 10-digit mobile number for delivery updates.'
+                  : 'Please check the delivery details and try again.'
       return NextResponse.json({ message: friendly }, { status: 422 })
     }
 
@@ -465,5 +609,86 @@ export async function POST(request: Request): Promise<NextResponse> {
     )
   } finally {
     client.release()
+  }
+}
+
+/**
+ * City display name for the notification, best effort.
+ *
+ * Best effort is the correct standard here: an e-mail saying "your order in
+ * Bengaluru has arrived" is worth a great deal more than an e-mail that is not
+ * sent at all because a lookup failed.
+ */
+async function cityNameFor(cityId: number): Promise<string | null> {
+  try {
+    const { rows } = await db().query<{ name: string }>(
+      `SELECT "name" FROM "cities" WHERE "id" = $1`,
+      [cityId],
+    )
+    return rows[0]?.name ?? null
+  } catch {
+    return null
+  }
+}
+
+/**
+ * The two messages an order must produce.
+ *
+ * ── WHY THE OWNER GETS ONE TOO ─────────────────────────────────────────────
+ *
+ * Because a storefront where the founder discovers sales by opening the database
+ * is not runnable by a founder. Urvann's audited weakness is that nobody answers;
+ * the mirror-image failure is a business that does not know it has been paid.
+ *
+ * The owner's copy is not a cc of the customer's: it is the PACKING LIST. What
+ * to pull, for whom, by when, and how much was taken. It is addressed to a
+ * configured inbox so it works with no panel open.
+ */
+async function notifyOrderPlaced(input: {
+  orderCode: string
+  customerName: string
+  customerPhone: string
+  addressLines: string[]
+  cityName: string
+  lines: Array<{ name: string; variant: string; quantity: number; linePaise: number }>
+  subtotalPaise: number
+  deliveryPaise: number
+  totalPaise: number
+}): Promise<void> {
+  const settings = await loadBusinessSettings()
+  const base = `${config.server.url.replace(/\/$/, '')}`
+
+  const templateInput = {
+    ...input,
+    // No city prefix here: the template already prints the city as its own
+    // field, and "Bengaluru: expected Bengaluru: tomorrow" is the kind of
+    // duplication nobody reads past.
+    estimatedWindow: 'next working day, or the same day if you order before the cutoff',
+    supportPhone: settings.customerCarePhone || 'our published number',
+    trackUrl: `${base}/track-order`,
+    receiptUrl: `${base}/order/${input.orderCode}`,
+  }
+
+  const customer = orderConfirmation(templateInput)
+  await sendEmail({
+    kind: 'order_confirmation',
+    to: customerMailbox(input.customerName, input.customerPhone),
+    toName: input.customerName,
+    subject: customer.subject,
+    text: customer.text,
+    html: customer.html,
+  })
+
+  const owner = adminNewOrder(templateInput)
+  const ownerAddress = config.email.orderAlertsEmail || settings.customerCareEmail
+  if (ownerAddress) {
+    await sendEmail({
+      kind: 'order_admin_alert',
+      to: ownerAddress,
+      subject: owner.subject,
+      text: owner.text,
+      html: owner.html,
+      internal: true,
+    })
   }
 }

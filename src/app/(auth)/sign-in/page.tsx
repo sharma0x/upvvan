@@ -40,8 +40,7 @@ type Step =
   | { name: 'sending' }
   | { name: 'verifying'; phone: string }
 
-const FIELD =
-  'w-full rounded-sm border border-border bg-surface-raised px-3.5 py-3.5 text-base'
+const FIELD = 'w-full rounded-sm border border-border bg-surface-raised px-3.5 py-3.5 text-base'
 
 /**
  * ── WHY THIS COMPONENT IS WRAPPED IN SUSPENSE ────────────────────────────────
@@ -260,14 +259,17 @@ function SignInForm() {
       )}
 
       {error && (
-        <p role="alert" className="border-danger bg-surface text-danger mt-base rounded-sm border px-4 py-3">
+        <p
+          role="alert"
+          className="border-danger bg-surface text-danger mt-base rounded-sm border px-4 py-3"
+        >
           {error}
         </p>
       )}
 
       <p className="text-ink-muted mt-xl mb-0 text-sm">
-        A new number creates an account automatically — there is nothing to fill
-        in. Your number is only used for order updates and delivery.
+        A new number creates an account automatically — there is nothing to fill in. Your number is
+        only used for order updates and delivery.
       </p>
     </main>
   )
@@ -281,7 +283,7 @@ export default function SignInPage() {
   return (
     <Suspense
       fallback={
-        <main className="mx-auto max-w-[440px] px-base py-3xl">
+        <main className="px-base py-3xl mx-auto max-w-[440px]">
           <p className="text-ink-muted m-0">Loading sign in…</p>
         </main>
       }

@@ -30,9 +30,7 @@ const DIMENSION_COLUMNS = [
 
 export async function up({ db }: MigrateUpArgs): Promise<void> {
   for (const column of DIMENSION_COLUMNS) {
-    await db.execute(
-      sql.raw(`ALTER TABLE "skus" ALTER COLUMN "${column}" DROP NOT NULL;`),
-    )
+    await db.execute(sql.raw(`ALTER TABLE "skus" ALTER COLUMN "${column}" DROP NOT NULL;`))
   }
 }
 
@@ -41,8 +39,6 @@ export async function down({ db }: MigrateDownArgs): Promise<void> {
   // is exactly right: the rollback must not silently invent dimensions for a
   // consumable listing.
   for (const column of DIMENSION_COLUMNS) {
-    await db.execute(
-      sql.raw(`ALTER TABLE "skus" ALTER COLUMN "${column}" SET NOT NULL;`),
-    )
+    await db.execute(sql.raw(`ALTER TABLE "skus" ALTER COLUMN "${column}" SET NOT NULL;`))
   }
 }

@@ -116,3 +116,143 @@
     align-items: center;
   }
 }
+
+/*
+ * Article prose.
+ *
+ * ── WHY THIS EXISTS RATHER THAN A PROSE PLUGIN ──────────────────────────────
+ * `@tailwindcss/typography` is not a dependency, and adding it to style ONE
+ * component's descendants would be the larger change. The rules below are the
+ * subset a Lexical body actually emits — heading, paragraph, list, quote, link,
+ * figure, hr — and nothing else, so a style cannot leak into a layout.
+ *
+ * ── WHY NO GENERIC `a` COLOUR CHANGE ───────────────────────────────────────
+ * `prose` plugins blanket-restyle links, which breaks the convention this
+ * codebase already has: an inline link inside prose is blue and underlined, and a
+ * link that is a whole card is styled by its component. Overriding both with one
+ * selector is how a card link ends up underlined inside a bordered box.
+ *
+ * `--spacing-*` and `--color-*` are the design tokens, so prose line-height and
+ * colour cannot drift from the rest of the site the way a hard-coded value would.
+ */
+.prose-upvvan {
+  max-width: 68ch;
+}
+
+.prose-upvvan > * + * {
+  margin-top: var(--spacing-base);
+}
+
+.prose-upvvan h2 {
+  font-family: var(--font-h2);
+  font-size: 1.5rem;
+  line-height: 1.2;
+  letter-spacing: var(--tracking-h2);
+  margin-top: var(--spacing-2xl);
+  margin-bottom: 0;
+}
+
+.prose-upvvan h3 {
+  font-family: var(--font-h2);
+  font-size: 1.2rem;
+  line-height: 1.25;
+  margin-top: var(--spacing-xl);
+  margin-bottom: 0;
+}
+
+.prose-upvvan h4 {
+  font-weight: 600;
+  margin-top: var(--spacing-lg);
+  margin-bottom: 0;
+}
+
+.prose-upvvan p {
+  margin-top: 0;
+  margin-bottom: 0;
+  line-height: 1.65;
+}
+
+/*
+ * Line length inside prose.
+ *
+ * 68ch is where a line of this typeface stops being scannable and starts being
+ * work. It is set on the container rather than only on paragraphs because a list
+ * that runs wider than its intro reads as a different document.
+ */
+.prose-upvvan ul,
+.prose-upvvan ol {
+  padding-left: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+}
+
+.prose-upvvan ul {
+  list-style: disc;
+}
+
+.prose-upvvan ol {
+  list-style: decimal;
+}
+
+.prose-upvvan li > p {
+  display: inline;
+}
+
+.prose-upvvan blockquote {
+  margin-top: var(--spacing-lg);
+  margin-bottom: 0;
+  padding-left: var(--spacing-base);
+  border-left: 1px solid var(--color-clay);
+  color: var(--color-ink-muted);
+  font-style: italic;
+}
+
+/*
+ * Inline code. `code` at body size in a serif-adjacent body font is nearly
+ * illegible at 1rem, so it steps down and gains a surface — the one place in the
+ * design system where a literal background is right, because code is not prose.
+ */
+.prose-upvvan code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.875em;
+  background-color: var(--color-surface-raised);
+  border-radius: var(--radius-sm);
+  padding: 0.1em 0.35em;
+}
+
+.prose-upvvan strong {
+  font-weight: 600;
+}
+
+.prose-upvvan hr {
+  border: 0;
+  border-top: 1px solid var(--color-border);
+  margin-block: var(--spacing-2xl);
+}
+
+/*
+ * Figures. `aspect-ratio` on a figure with no width collapses to the 1px minimum
+ * in the same way the catalogue card did — the bug recorded in `PlantCard.tsx`.
+ * `display: block` plus the padding-bottom trick is unnecessary here because the
+ * image itself carries `loading="lazy"` and is NOT a `next/image` fill image, so
+ * it has intrinsic dimensions. That is the reason the two are written differently,
+ * and it is worth stating because the next person will try to make them match.
+ */
+.prose-upvvan figure {
+  margin: var(--spacing-xl) 0 0;
+}
+
+.prose-upvvan figure img {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
+}
+
+.prose-upvvan figcaption {
+  font-size: 0.875rem;
+  color: var(--color-ink-muted);
+  margin-top: var(--spacing-xs);
+}

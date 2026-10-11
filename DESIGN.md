@@ -237,12 +237,12 @@ scopes, because a monochrome green page cannot carry a planter ladder, a
 seasonal catalogue and a set of category facets without them all collapsing into
 the same signal.
 
-| Token | Scope | Forbidden as |
-| ----- | ----- | ------------ |
-| `primary` / `success` | Actions, affirmative answers, "yes we deliver" | Backgrounds behind long body copy |
-| `forest` | Display type, trust rail, section grounds | Anything that must read as a click |
-| `clay` | Eyebrow labels, planter surfaces, pot selection | Any yes/no state |
-| `ochre` | Consumables only — soil, fertiliser, neem cake | A living plant |
+| Token                 | Scope                                           | Forbidden as                       |
+| --------------------- | ----------------------------------------------- | ---------------------------------- |
+| `primary` / `success` | Actions, affirmative answers, "yes we deliver"  | Backgrounds behind long body copy  |
+| `forest`              | Display type, trust rail, section grounds       | Anything that must read as a click |
+| `clay`                | Eyebrow labels, planter surfaces, pot selection | Any yes/no state                   |
+| `ochre`               | Consumables only — soil, fertiliser, neem cake  | A living plant                     |
 
 The separation that matters: **clay never answers a question.** If clay is on
 screen, nothing is being asserted to the customer. That is what keeps "green

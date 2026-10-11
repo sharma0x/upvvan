@@ -47,7 +47,7 @@ const STEPS = [
 
 export default function Provenance({ cityName }: { cityName: string }) {
   return (
-    <section className="mx-auto max-w-[1120px] px-base pt-3xl" aria-labelledby="prov-heading">
+    <section className="px-base pt-3xl mx-auto max-w-[1120px]" aria-labelledby="prov-heading">
       <p className="text-label-caps text-clay m-0">Where your plant actually comes from</p>
       <h2 id="prov-heading" className="mt-xs mb-0">
         Grown forty minutes away. Not shipped to you.
@@ -71,9 +71,9 @@ export default function Provenance({ cityName }: { cityName: string }) {
       </ol>
 
       <p className="text-ink-muted mt-base mb-0 text-sm">
-        We are a single-city shop and we intend to stay that way until the economics say
-        otherwise. Every other Indian plant seller grew by adding cities; that is the mistake we
-        would rather not copy.
+        We are a single-city shop and we intend to stay that way until the economics say otherwise.
+        Every other Indian plant seller grew by adding cities; that is the mistake we would rather
+        not copy.
       </p>
       {/* City named once, in the band, not invented into a specific farm address. */}
       <span className="sr-only">Serving {cityName}.</span>

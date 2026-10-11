@@ -28,8 +28,7 @@ import { defaultLaunchBands, type DistanceBand } from '@/lib/geo/bands'
 import { minMultiplierBpFor, multiplierPreservesBandOrdering } from '../pay'
 
 /** The smallest multiplier that keeps this city's bands strictly ordered. */
-const safeFloorFor = (bands: Parameters<typeof minMultiplierBpFor>[0]) =>
-  minMultiplierBpFor(bands)
+const safeFloorFor = (bands: Parameters<typeof minMultiplierBpFor>[0]) => minMultiplierBpFor(bands)
 
 const BANDS = defaultLaunchBands()
 
@@ -322,7 +321,10 @@ describe('capacity is a real limit, and the error names who is full', () => {
   it('falls back to the zone capacity when the rider has no override', () => {
     const a = assignDispatch(
       base({
-        riders: [rider({ id: 1, name: 'ZoneFull', maxDropsPerDay: null }), rider({ id: 2, name: 'ZoneRoom' })],
+        riders: [
+          rider({ id: 1, name: 'ZoneFull', maxDropsPerDay: null }),
+          rider({ id: 2, name: 'ZoneRoom' }),
+        ],
         loads: [{ riderId: 1, status: 'ASSIGNED', assignedAt: new Date() }],
         zones: [{ zoneId: 10, maxDailyDrops: 1 }],
       }),

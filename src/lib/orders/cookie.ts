@@ -54,7 +54,9 @@ export function orderCookieName(orderCode: string): string {
 }
 
 export function signOrderCode(orderCode: string): string {
-  return createHmac('sha256', config.payload.secret).update(`${INFO}:${orderCode}`).digest('base64url')
+  return createHmac('sha256', config.payload.secret)
+    .update(`${INFO}:${orderCode}`)
+    .digest('base64url')
 }
 
 /**

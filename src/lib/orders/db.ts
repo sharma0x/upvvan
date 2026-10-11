@@ -1,8 +1,8 @@
 import { Pool, type PoolClient } from 'pg'
 
-import { config } from '@/lib/config'
 import { newOrderCode } from '@/lib/payments/gateway'
 import { canonicalStatus, type OrderStatus } from '@/lib/orders/status'
+import { getPool as sharedPool } from '@/lib/db/pool'
 
 /**
  * Shared database access for the order domain.
@@ -15,11 +15,28 @@ import { canonicalStatus, type OrderStatus } from '@/lib/orders/status'
  * pools with different snapshot views — which is how a freshly captured order
  * renders as "Payment pending" on the confirmation page. One pool, one place.
  */
-let pool: Pool | null = null
 
+/*
+ * Delegates to the ONE process-wide pool.
+ *
+ * There were nine module-level pools in this codebase — this one was `max: 20`,
+ * and `catalogue/loader.server.ts` was another `max: 20`, which is 40 connections
+ * from two modules before anything else loads. `next build` prerenders dozens of
+ * routes in parallel and died with
+ *
+ *     error: sorry, too many clients already
+ *     Error occurred prerendering page "/collections/plants-for-a-bright-room"
+ *
+ * A pool exists to REUSE connections. Nine pools reusing the same handful is not
+ * reuse; it is nine warm-up costs and nine places for a leak to hide. See
+ * `src/lib/db/pool.ts`.
+ *
+ * Kept as a thin wrapper rather than replaced at every call site: the callers are
+ * correct, and rewriting working call sites during an incident is how an incident
+ * becomes an outage.
+ */
 export function db(): Pool {
-  if (!pool) pool = new Pool({ connectionString: config.database.url })
-  return pool
+  return sharedPool()
 }
 
 /**

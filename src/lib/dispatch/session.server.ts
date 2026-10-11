@@ -36,19 +36,28 @@
 
 import { createHmac, timingSafeEqual } from 'node:crypto'
 import { cookies } from 'next/headers'
+import { redirect } from 'next/navigation'
 
+import { getPayload, type Payload } from 'payload'
+import payloadConfig from '@payload-config'
 import { config } from '@/lib/config'
 import { getPool } from './store.server'
 import { generateOtp, hashOtp, verifyOtp } from './otp'
+import { deliverOtp } from '@/lib/auth/otp-delivery'
 
 export const RIDER_COOKIE = 'upvvan_rider'
 
 /**
  * Rider session length. Short by staff standards and long by OTP standards:
  * a rider signs in once at the start of a shift and then spends the day on
- * `outFor_delivery`, so a five-minute session would log them out mid-run.
+ * `out_for_delivery`, so a five-minute session would log them out mid-run.
+ *
+ * It is read from `config`, because "nothing operational is hardcoded" is a rule
+ * this codebase keeps — and a session lifetime that cannot be changed without a
+ * redeploy is the kind of value that gets baked in by accident and then defended
+ * as if it were a decision. Twelve hours covers a shift.
  */
-const SESSION_TTL_MS = 12 * 60 * 60 * 1000
+const SESSION_TTL_MS = config.auth.riderSessionTtlSeconds * 1000
 
 export interface RiderSession {
   riderId: number
@@ -136,11 +145,40 @@ export async function createLoginChallenge(
     [riderId, hash, salt, String(config.auth.otpExpiresIn)],
   )
 
+  /*
+   * The outbox row is the audit trail, not the delivery.
+   *
+   * This function used to write ONLY here — and there is no SMS gateway wired, so
+   * nothing ever drains `outbox`. Which left rider sign-in reachable through
+   * exactly one path:
+   *
+   *     the `devCode` in the response, which is gated on NODE_ENV !== 'production'
+   *
+   * So in production NO RIDER COULD EVER SIGN IN. Not "sign-in is flaky" — the
+   * feature did not exist. Riders would arrive at /rider, be redirected to
+   * /rider/signin, press "Send code", see the request succeed, and wait for a
+   * message that was never going to arrive. Nothing would be delivered, ever, and
+   * no error would be raised anywhere: the row was written, the response was 200,
+   * and the code went into a table nobody reads.
+   *
+   * Found by running the simulation against a production build with no `devCode`
+   * to fall back on, and reading the code out of Mailpit the way a rider reads it
+   * off their phone. The dev server had never found it, because on the dev server
+   * the fallback branch is always there.
+   *
+   * The real SMS path stays in `deliverOtp` — one function, swapped for the
+   * WhatsApp Business API in Phase 4. Same shape as the customer sign-in OTP, so
+   * there is exactly one place where "how does a code reach a human" is decided.
+   */
+  const body = `Your Upvvan rider code is ${code}. It expires in a few minutes.`
+
   await db.query(
     `INSERT INTO "outbox" ("channel", "to_number", "body", "kind")
      VALUES ('sms', $1, $2, 'rider_login')`,
-    [phone, `Your Upvvan rider code is ${code}. It expires in a few minutes.`],
+    [phone, body],
   )
+
+  await deliverOtp({ phoneNumber: phone, code })
 
   return {
     challengeId: rows[0]!.id,
@@ -263,26 +301,177 @@ export async function clearRiderCookie(): Promise<void> {
  * Local API inside a server component for a cookie read pulls the whole admin
  * bundle into the request path, and the session table is right there.
  */
+/**
+ * One Payload instance per server process, shared across requests.
+ *
+ * The original comment on `currentStaff` said it deliberately avoided `getPayload()`
+ * because booting the CMS inside a server component "pulls the whole admin bundle
+ * into the request path". That optimisation is what broke staff auth: the
+ * hand-rolled HMAC cannot work, because Payload does not sign its session cookie
+ * with `payload.secret` — it derives its own signing key — and reverse-engineering
+ * that derivation would couple this file to an internal detail of the CMS.
+ *
+ * A module-level singleton is the answer to both concerns. The instance is built
+ * once per process and reused, so the per-request cost is an auth lookup against a
+ * warm connection pool, not a re-initialisation. That is what every Payload app
+ * does in practice.
+ */
+let payloadInstance: Promise<Payload> | null = null
+function payloadClient(): Promise<Payload> {
+  if (!payloadInstance) {
+    payloadInstance = getPayload({ config: payloadConfig }).catch((error: unknown) => {
+      // Do not cache a failed boot: the next request should try again rather than
+      // inherit a broken instance for the life of the process.
+      payloadInstance = null
+      throw error
+    })
+  }
+  return payloadInstance
+}
+
 export async function currentStaff(): Promise<{ id: number; email: string | null } | null> {
   const store = await cookies()
   // Payload's default session cookie name.
   const raw = store.get('payload-token')?.value
   if (!raw) return null
+  /*
+   * ── STEP 1 · A CHEAP SHAPE CHECK, BEFORE ANY CMS WORK ─────────────────────
+   *
+   * Anonymous traffic is the common case for these endpoints — a bot hitting
+   * `/api/dispatch/assign`, a customer's browser polling it. All this needs to do
+   * is reject the obviously-not-ours before anything expensive happens, and it
+   * rejects on SHAPE only: three segments, HS256, an unexpired `exp`.
+   *
+   * Deliberately no signature check here, because there is no key to check
+   * against. This is a filter, not authentication — see step 2, which is what
+   * actually decides.
+   */
+  if (!plausibleStaffCookie(raw)) return null
 
-  const db = await getPool()
-  // `users_sessions` is Payload's SESSIONS ARRAY FIELD, not its own auth
-  // collection: `_parent_id` is the user, `id` IS the session token, and the
-  // expiry is `expires_at` — not `expiresAt`, because `timestamps` does not
-  // apply to an array field's table (AGENTS.md's third array surprise). Those
-  // three details are load-bearing for staff auth, so the query is written out
-  // rather than re-guessed at each call site.
-  const { rows } = await db.query<{ parentId: number; email: string | null }>(
-    `SELECT s."_parent_id" AS "parentId", u."email"
-       FROM "users_sessions" s
-       JOIN "users" u ON u."id" = s."_parent_id"
-      WHERE s."id" = $1 AND s."expires_at" > now()`,
-    [raw],
-  )
-  const row = rows[0]
-  return row ? { id: Number(row.parentId), email: row.email } : null
+  /*
+   * ── STEP 2 · ASK PAYLOAD, WHO OWNS THE CMS ────────────────────────────────
+   *
+   * `payload.auth()` is the single authority on "is this cookie a signed-in
+   * member of collection X, and is that session still live". Implementing it
+   * ourselves is not an option: the signature is produced with a key Payload
+   * derives internally, and a hand-rolled check is either a forgery hole (decode
+   * without verify) or a maintenance liability (mirror an internal detail).
+   *
+   * The `collection` test is the one that matters most. better-auth owns CUSTOMER
+   * identity (C-1) and issues its own cookie. If that were accepted here, a
+   * customer could sign in to their own account and then mutate the append-only
+   * dispatch ledger — a customer becoming the ops console. Requiring
+   * `collection === 'users'` makes the two session systems structurally
+   * incapable of being confused for one another.
+   *
+   * `db: false` because nothing in the return value is used. It is not a
+   * permission check either — `canSetHeaders` and the permission checks belong to
+   * the routes that mutate, and those routes gate on this function's answer.
+   */
+  let user: { id: number | string; collection?: string; email?: string | null } | null
+  try {
+    const payload = await payloadClient()
+    const { user: resolved } = await payload.auth({
+      headers: new Headers({ cookie: `payload-token=${raw}` }),
+      canSetHeaders: false,
+    })
+    // `collection` is present on the real user type; the narrower local type keeps
+    // the `=== 'users'` check honest rather than silently undefined.
+    user = resolved as typeof user
+  } catch (error) {
+    console.error('[dispatch] staff auth resolution failed:', (error as Error).message)
+    return null
+  }
+
+  if (!user) return null
+  if (user.collection !== 'users') return null
+
+  const id = Number(user.id)
+  if (!Number.isInteger(id)) return null
+
+  return { id, email: user.email ?? null }
+}
+
+/**
+ * Is this cookie even SHAPED like a Payload session token?
+ *
+ * Not authentication — a filter that keeps anonymous requests from booting the
+ * CMS. Three segments, HS256, an unexpired `exp`, and a payload that claims to be
+ * a `users` session.
+ *
+ * Exported for the test suite, because "does this reject the shapes it should"
+ * is a property worth pinning independently of whether the real signature check
+ * works. It must never be the ONLY thing between a request and the ops console.
+ */
+export function plausibleStaffCookie(raw: string): boolean {
+  const segments = raw.split('.')
+  if (segments.length !== 3) return false
+  const [header, payload] = segments as [string, string, string]
+
+  try {
+    const alg = (JSON.parse(Buffer.from(header, 'base64url').toString('utf8')) as { alg?: string })
+      .alg
+    /*
+     * `alg` MUST be HS256.
+     *
+     * A verifier that computes a signature but never compares it — which is what
+     * `{"alg":"none"}` aims to provoke — is not a verifier. Pinning the algorithm
+     * closes the downgrade at the cheapest possible point.
+     */
+    if (alg !== 'HS256') return false
+
+    const claims = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8')) as {
+      collection?: unknown
+      exp?: unknown
+    }
+    if (claims.collection !== 'users') return false
+    if (typeof claims.exp !== 'number') return false
+    return claims.exp * 1000 > Date.now()
+  } catch {
+    return false
+  }
+}
+
+/**
+ * Require a signed-in staff member, or redirect to the admin sign-in.
+ *
+ * ── WHY THE OPS READ PAGES NEED THIS AND THE WRITE ROUTES ALREADY DID ───────
+ *
+ * `/admin-ops` renders with a banner for an anonymous visitor: "You are not
+ * signed in as staff, so you can look but not assign." That was a decision about
+ * the DASHBOARD, and the dashboard is counts — six numbers and a table of order
+ * codes.
+ *
+ * `/admin-ops/queue` and `/admin-ops/board` had no gate at all. They are not
+ * dashboards; they are the operational record. Between them they render, to
+ * anyone on the internet who types the URL:
+ *
+ *   · every order code placed today, with its pincode, zone and REVENUE
+ *   · every rider name, their distance band and their PAYOUT, per drop
+ *   · zone capacity against each zone's daily drop limit
+ *   · the full append-only `dispatch_events` ledger, with actor labels
+ *
+ * `robots: noindex` is not access control — it is a polite request to a crawler
+ * that has no reason to comply, and the pages were reachable in one guess from
+ * the footer-adjacent nav. Only the write route (`/api/dispatch/assign`) was
+ * gated, so the ledger's integrity argument ("nothing mutates without a
+ * resolvable actor") held while its CONFIDENTIALITY did not.
+ *
+ * So: read pages are gated the same way write routes are. The redirect target is
+ * the admin panel's own login, which is the one place a staff member already
+ * knows how to authenticate, and `next` is preserved so they land back on the
+ * queue they were trying to reach.
+ *
+ * This is a redirect rather than a 403 because every caller is a PAGE. An
+ * operator whose admin session expired mid-shift gets the way to fix it instead
+ * of a status code.
+ */
+export async function requireOpsStaff(
+  nextPath: string,
+): Promise<{ id: number; email: string | null }> {
+  const staff = await currentStaff()
+  if (!staff) {
+    redirect(`/admin/login?redirect=${encodeURIComponent(nextPath)}`)
+  }
+  return staff
 }

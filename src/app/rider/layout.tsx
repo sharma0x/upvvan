@@ -45,19 +45,17 @@ export default async function RiderLayout({ children }: { children: React.ReactN
   const rider = await currentRider()
 
   return (
-    <div className="min-h-screen bg-surface">
+    <div className="bg-surface min-h-screen">
       <a
         href="#rider-main"
-        className="sr-only focus:not-sr-only focus:absolute focus:top-sm focus:left-sm focus:z-50 focus:rounded-sm focus:bg-primary focus:px-base focus:py-sm focus:text-surface-card"
+        className="focus:top-sm focus:left-sm focus:bg-primary focus:px-base focus:py-sm focus:text-surface-card sr-only focus:not-sr-only focus:absolute focus:z-50 focus:rounded-sm"
       >
         Skip to your run
       </a>
 
-      <header className="border-b border-border bg-surface-raised">
-        <div className="mx-auto flex max-w-[640px] flex-wrap items-baseline justify-between gap-sm px-base py-base">
-          <p className="text-label-caps text-clay m-0">
-            {rider ? rider.name : 'Upvvan rider'}
-          </p>
+      <header className="border-border bg-surface-raised border-b">
+        <div className="gap-sm px-base py-base mx-auto flex max-w-[640px] flex-wrap items-baseline justify-between">
+          <p className="text-label-caps text-clay m-0">{rider ? rider.name : 'Upvvan rider'}</p>
           {rider ? (
             <form action="/api/rider/session" method="post">
               {/*
@@ -70,7 +68,7 @@ export default async function RiderLayout({ children }: { children: React.ReactN
               <input type="hidden" name="action" value="signout" />
               <button
                 type="submit"
-                className="min-h-[44px] cursor-pointer rounded-sm border border-border bg-surface-card px-base py-sm text-sm"
+                className="border-border bg-surface-card px-base py-sm min-h-[44px] cursor-pointer rounded-sm border text-sm"
               >
                 End shift
               </button>
@@ -79,7 +77,7 @@ export default async function RiderLayout({ children }: { children: React.ReactN
         </div>
       </header>
 
-      <main id="rider-main" className="mx-auto max-w-[640px] px-base py-xl pb-3xl">
+      <main id="rider-main" className="px-base py-xl pb-3xl mx-auto max-w-[640px]">
         {children}
       </main>
     </div>

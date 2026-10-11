@@ -50,7 +50,12 @@
  * preserves band ordering after the per-rider multiplier is applied.
  */
 
-import { type DistanceBand, type Paise, assertBandsAreMonotonic, bandForDistance } from '@/lib/geo/bands'
+import {
+  type DistanceBand,
+  type Paise,
+  assertBandsAreMonotonic,
+  bandForDistance,
+} from '@/lib/geo/bands'
 
 /** Basis points. 10000 = 1.0×. Integer — a float here is a rounding bug. */
 export type BasisPoints = number
@@ -326,8 +331,7 @@ export function assignDispatch(input: AssignInput): Assignment {
 
       // Per-rider override wins; the zone capacity is the default. A rider on a
       // two-wheeler carrying a 40kg planter set genuinely cannot do eight drops.
-      const zoneCap =
-        input.zones.find((z) => sameId(z.zoneId, input.zoneId))?.maxDailyDrops ?? null
+      const zoneCap = input.zones.find((z) => sameId(z.zoneId, input.zoneId))?.maxDailyDrops ?? null
       const capacity = rider.maxDropsPerDay ?? zoneCap
 
       return { rider, loadBefore, capacity }

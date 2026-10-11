@@ -114,10 +114,9 @@ describe('launch blockers — illegal direct writes only', () => {
 
     it('REQUIRES a plant to name its species', async () => {
       if (!connected) return
-      const msg = await attempt(
-        `UPDATE "skus" SET "species_id" = NULL WHERE "id" = $1`,
-        [plantSkuId],
-      )
+      const msg = await attempt(`UPDATE "skus" SET "species_id" = NULL WHERE "id" = $1`, [
+        plantSkuId,
+      ])
       expect(msg).not.toBe('ACCEPTED')
       expect(msg).toMatch(/skus_plant_requires_species/)
     })
@@ -178,15 +177,32 @@ describe('launch blockers — illegal direct writes only', () => {
       if (!connected) return
       // The data is fixed, not just the constraint. A trigger that rejects new
       // bad rows while 12 published rows stay bad is not a fix.
-      const rows = await exec<{ sku_code: string; declared: number; top: number }>(`
+      //
+      // This query MIRRORS `skus_mrp_covers_ladder()` in migration 000013, branch
+      // for branch. It used to apply the planter ladder to everything and failed
+      // on `SOIL-COCOPEAT-5KG` — declaring MRP ₹249 against a ladder top of
+      // ₹550.29 for a terracotta pot it cannot be sold in.
+      //
+      // That was the TEST being wrong, not the seed. 000013 had already narrowed
+      // the trigger to plants, for the reason its own comment gives: a pot picker
+      // is a variant of a plant, and there is no planter variant of a bag of
+      // cocopeat. Two copies of one rule drift, and the drift is invisible until
+      // the data disagrees — so the rule lives in exactly one place and the
+      // non-plant branch is spelled out here rather than assumed away.
+      const rows = await exec<{ sku_code: string; declared: number; top: number; class: string }>(`
         SELECT "sku_code",
+               "item_class" AS class,
                "legal_metrology_mrp_paise" AS declared,
-               ceil("base_price_paise" * (10000 + CASE "size_tier"
-                     WHEN 'MD' THEN 45000 WHEN 'LG' THEN 120000
-                     WHEN 'XL' THEN 260000 ELSE 0 END) / 10000)
-               + ceil(ceil("base_price_paise" * (10000 + CASE "size_tier"
-                     WHEN 'MD' THEN 45000 WHEN 'LG' THEN 120000
-                     WHEN 'XL' THEN 260000 ELSE 0 END) / 10000) * 12100 / 10000) AS top
+               CASE WHEN "item_class" IS DISTINCT FROM 'plant'
+                 -- No pot ladder: the only selectable configuration is itself.
+                 THEN "base_price_paise"
+                 ELSE ceil("base_price_paise" * (10000 + CASE "size_tier"
+                        WHEN 'MD' THEN 45000 WHEN 'LG' THEN 120000
+                        WHEN 'XL' THEN 260000 ELSE 0 END) / 10000)
+                      + ceil(ceil("base_price_paise" * (10000 + CASE "size_tier"
+                        WHEN 'MD' THEN 45000 WHEN 'LG' THEN 120000
+                        WHEN 'XL' THEN 260000 ELSE 0 END) / 10000) * 12100 / 10000)
+               END AS top
           FROM "skus" WHERE "is_published"
       `)
       expect(rows.length).toBeGreaterThan(0)
@@ -336,10 +352,9 @@ describe('launch blockers — illegal direct writes only', () => {
       // THE finding. `cities_live_requires_licence` only read `status`, but the
       // serviceability gate reads `is_active` — so this exact UPDATE made an
       // unlicensed city serviceable, and a raw order insert then followed.
-      const msg = await attempt(
-        `UPDATE "cities" SET "is_active" = true WHERE "id" = $1`,
-        [hyderabadId],
-      )
+      const msg = await attempt(`UPDATE "cities" SET "is_active" = true WHERE "id" = $1`, [
+        hyderabadId,
+      ])
       expect(msg).not.toBe('ACCEPTED')
       expect(msg).toMatch(/cities_active_requires_live_licence/)
     })
@@ -436,9 +451,12 @@ describe('launch blockers — illegal direct writes only', () => {
       try {
         await client.query('BEGIN')
         await client.query(`DELETE FROM "delivery_bands" WHERE "city_id" = $1`, [bengaluruId])
-        await client.query(`INSERT INTO "delivery_bands"
+        await client.query(
+          `INSERT INTO "delivery_bands"
                               ("city_id","code","label","min_km","max_km","pay_paise","updated_at","created_at")
-                            VALUES ($1, 'FLAT', 'Flat 0-1000km', 0, 1000, 4500, now(), now())`, [bengaluruId])
+                            VALUES ($1, 'FLAT', 'Flat 0-1000km', 0, 1000, 4500, now(), now())`,
+          [bengaluruId],
+        )
         await client.query('SET CONSTRAINTS trg_bands_need_tiers IMMEDIATE')
         await client.query('ROLLBACK')
       } catch (err) {

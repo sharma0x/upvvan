@@ -75,10 +75,7 @@ afterAll(async () => {
  * behaviour (validate at commit, not per statement) is exactly right.
  */
 /** Run one statement inside its own SAVEPOINT so a rejection does not poison the transaction. */
-async function savepoint<T>(
-  client: import('pg').PoolClient,
-  fn: () => Promise<T>,
-): Promise<T> {
+async function savepoint<T>(client: import('pg').PoolClient, fn: () => Promise<T>): Promise<T> {
   await client.query('SAVEPOINT sp')
   try {
     const result = await fn()
@@ -131,121 +128,109 @@ describe('schema-layer invariants — proven by ILLEGAL DIRECT WRITES', () => {
   describe('INVARIANT 1 · rider pay must increase with distance', () => {
     it('a valid monotonic band set inserts successfully', async () => {
       if (!connected) return
-      await withBandTransaction(
-        async (client, cityId) => {
-          for (const b of [
-            { code: 'A', min: 0, max: 3, pay: 4500 },
-            { code: 'B', min: 3, max: 7, pay: 6000 },
-            { code: 'C', min: 7, max: 12, pay: 7500 },
-          ]) {
-            await client.query(
-              `INSERT INTO delivery_bands (code, label, min_km, max_km, pay_paise, city_id, updated_at, created_at)
+      await withBandTransaction(async (client, cityId) => {
+        for (const b of [
+          { code: 'A', min: 0, max: 3, pay: 4500 },
+          { code: 'B', min: 3, max: 7, pay: 6000 },
+          { code: 'C', min: 7, max: 12, pay: 7500 },
+        ]) {
+          await client.query(
+            `INSERT INTO delivery_bands (code, label, min_km, max_km, pay_paise, city_id, updated_at, created_at)
                VALUES ($1,$2,$3,$4,$5,$6, now(), now())`,
-              [b.code, `Band ${b.code}`, b.min, b.max, b.pay, cityId],
-            )
-          }
-          const { rows } = await client.query<{ count: number }>(
-            `SELECT COUNT(*)::int AS count FROM delivery_bands WHERE city_id = $1`,
-            [cityId],
+            [b.code, `Band ${b.code}`, b.min, b.max, b.pay, cityId],
           )
-          expect(rows[0]!.count).toBe(3)
-        },
-        'bands-ok',
-      )
+        }
+        const { rows } = await client.query<{ count: number }>(
+          `SELECT COUNT(*)::int AS count FROM delivery_bands WHERE city_id = $1`,
+          [cityId],
+        )
+        expect(rows[0]!.count).toBe(3)
+      }, 'bands-ok')
     })
 
     it('REJECTS a direct insert where a LONGER band pays LESS', async () => {
       if (!connected) return
       await expect(
-        withBandTransaction(
-          async (client, cityId) => {
-            await client.query(
-              `INSERT INTO delivery_bands (code,label,min_km,max_km,pay_paise,city_id,updated_at,created_at)
+        withBandTransaction(async (client, cityId) => {
+          await client.query(
+            `INSERT INTO delivery_bands (code,label,min_km,max_km,pay_paise,city_id,updated_at,created_at)
                VALUES ('A','Band A',0,3,4500,$1, now(), now())`,
-              [cityId],
-            )
-            // Bypassing every application hook. Only the DB can stop this.
-            // SAVEPOINT so the rejection surfaces here rather than aborting the
-            // transaction and masking the message with "transaction is aborted".
-            await savepoint(client, () =>
-              client.query(
-                `INSERT INTO delivery_bands (code,label,min_km,max_km,pay_paise,city_id,updated_at,created_at)
+            [cityId],
+          )
+          // Bypassing every application hook. Only the DB can stop this.
+          // SAVEPOINT so the rejection surfaces here rather than aborting the
+          // transaction and masking the message with "transaction is aborted".
+          await savepoint(client, () =>
+            client.query(
+              `INSERT INTO delivery_bands (code,label,min_km,max_km,pay_paise,city_id,updated_at,created_at)
                  VALUES ('B','Band B',3,7,1000,$1, now(), now())`,
-                [cityId],
-              ),
-            )
-          },
-          'bands-inverted',
-        ),
+              [cityId],
+            ),
+          )
+        }, 'bands-inverted'),
       ).rejects.toThrow(/NOT more than|Longer routes must pay strictly more/i)
     })
 
     it('REJECTS a direct UPDATE that inverts the incentive', async () => {
       if (!connected) return
-      await withBandTransaction(
-        async (client, cityId) => {
-          // Capture BOTH ids so the attack targets the far band, not the near one.
-          const near = await client.query<{ id: number }>(
-            `INSERT INTO delivery_bands (code,label,min_km,max_km,pay_paise,city_id,updated_at,created_at)
+      await withBandTransaction(async (client, cityId) => {
+        // Capture BOTH ids so the attack targets the far band, not the near one.
+        const near = await client.query<{ id: number }>(
+          `INSERT INTO delivery_bands (code,label,min_km,max_km,pay_paise,city_id,updated_at,created_at)
              VALUES ('A','Band A',0,3,4500,$1, now(), now()) RETURNING id`,
-            [cityId],
-          )
-          const far = await client.query<{ id: number }>(
-            `INSERT INTO delivery_bands (code,label,min_km,max_km,pay_paise,city_id,updated_at,created_at)
+          [cityId],
+        )
+        const far = await client.query<{ id: number }>(
+          `INSERT INTO delivery_bands (code,label,min_km,max_km,pay_paise,city_id,updated_at,created_at)
              VALUES ('B','Band B',3,7,6000,$1, now(), now()) RETURNING id`,
-            [cityId],
-          )
+          [cityId],
+        )
 
-          // The exact attack: drag the FAR band down to the near band's pay. This
-          // is a single UPDATE on one row, bypassing every application hook. Only
-          // the DB trigger can refuse it.
-          await expect(
-            savepoint(client, () =>
-              client.query(`UPDATE delivery_bands SET pay_paise = 4500 WHERE id = $1`, [
-                far.rows[0]!.id,
-              ]),
-            ),
-          ).rejects.toThrow(/NOT less than|Longer routes must pay strictly more/i)
+        // The exact attack: drag the FAR band down to the near band's pay. This
+        // is a single UPDATE on one row, bypassing every application hook. Only
+        // the DB trigger can refuse it.
+        await expect(
+          savepoint(client, () =>
+            client.query(`UPDATE delivery_bands SET pay_paise = 4500 WHERE id = $1`, [
+              far.rows[0]!.id,
+            ]),
+          ),
+        ).rejects.toThrow(/NOT less than|Longer routes must pay strictly more/i)
 
-          // And the near band dragged UP past the far one is the same defect.
-          await expect(
-            savepoint(client, () =>
-              client.query(`UPDATE delivery_bands SET pay_paise = 9000 WHERE id = $1`, [
-                near.rows[0]!.id,
-              ]),
-            ),
-          ).rejects.toThrow(/NOT more than|Longer routes must pay strictly more/i)
+        // And the near band dragged UP past the far one is the same defect.
+        await expect(
+          savepoint(client, () =>
+            client.query(`UPDATE delivery_bands SET pay_paise = 9000 WHERE id = $1`, [
+              near.rows[0]!.id,
+            ]),
+          ),
+        ).rejects.toThrow(/NOT more than|Longer routes must pay strictly more/i)
 
-          // Sanity: the legal update still works, so the trigger is not simply
-          // rejecting everything.
-          await client.query(`UPDATE delivery_bands SET pay_paise = 7000 WHERE id = $1`, [
-            far.rows[0]!.id,
-          ])
-        },
-        'bands-update',
-      )
+        // Sanity: the legal update still works, so the trigger is not simply
+        // rejecting everything.
+        await client.query(`UPDATE delivery_bands SET pay_paise = 7000 WHERE id = $1`, [
+          far.rows[0]!.id,
+        ])
+      }, 'bands-update')
     })
 
     it('REJECTS overlapping bands', async () => {
       if (!connected) return
       await expect(
-        withBandTransaction(
-          async (client, cityId) => {
-            await client.query(
-              `INSERT INTO delivery_bands (code,label,min_km,max_km,pay_paise,city_id,updated_at,created_at)
+        withBandTransaction(async (client, cityId) => {
+          await client.query(
+            `INSERT INTO delivery_bands (code,label,min_km,max_km,pay_paise,city_id,updated_at,created_at)
                VALUES ('A','Band A',0,4,4500,$1, now(), now())`,
-              [cityId],
-            )
-            await savepoint(client, () =>
-              client.query(
-                `INSERT INTO delivery_bands (code,label,min_km,max_km,pay_paise,city_id,updated_at,created_at)
+            [cityId],
+          )
+          await savepoint(client, () =>
+            client.query(
+              `INSERT INTO delivery_bands (code,label,min_km,max_km,pay_paise,city_id,updated_at,created_at)
                  VALUES ('B','Band B',3,7,6000,$1, now(), now())`,
-                [cityId],
-              ),
-            )
-          },
-          'bands-overlap',
-        ),
+              [cityId],
+            ),
+          )
+        }, 'bands-overlap'),
       ).rejects.toThrow(/overlaps/i)
     })
 
@@ -258,16 +243,13 @@ describe('schema-layer invariants — proven by ILLEGAL DIRECT WRITES', () => {
       // disk. The next run then failed on `cities_slug_idx`. A test that leaves
       // fixtures in the database is a test that breaks the next run.
       await expect(
-        withBandTransaction(
-          async (client, cityId) => {
-            await client.query(
-              `INSERT INTO delivery_bands (code,label,min_km,max_km,pay_paise,city_id,updated_at,created_at)
+        withBandTransaction(async (client, cityId) => {
+          await client.query(
+            `INSERT INTO delivery_bands (code,label,min_km,max_km,pay_paise,city_id,updated_at,created_at)
                VALUES ('A','Band A',0,3,4500.5,$1, now(), now())`,
-              [cityId],
-            )
-          },
-          'bands-float',
-        ),
+            [cityId],
+          )
+        }, 'bands-float'),
       ).rejects.toThrow()
     })
   })

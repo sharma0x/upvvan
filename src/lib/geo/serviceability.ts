@@ -50,6 +50,23 @@ export interface CityRef {
   /** State code, for operator-facing error messages ("not in Telangana yet"). */
   stateCode?: string | null
   /**
+   * State NAME, e.g. "Karnataka".
+   *
+   * Separate from `stateCode` because a delivery address needs "Karnataka" and a
+   * code of "KA" is not a thing you print on a label. The checkout address form
+   * used to hardcode "Karnataka" with no input, so a customer anywhere else in
+   * the country got an order written with our state on it.
+   */
+  stateName?: string | null
+  /**
+   * GST rate in basis points for THIS city, or null to use the global default.
+   *
+   * Per city because it is a tax rate and tax rates are not global. A single
+   * env var silently over-charges or under-charges any city that differs, and
+   * the difference shows up on a tax invoice rather than in a log.
+   */
+  taxRateBp?: number | null
+  /**
    * GSTIN, e.g. `29ABCDE1234F1Z5`.
    *
    * Optional because `CityRef` is also constructed in TESTS and from fixtures

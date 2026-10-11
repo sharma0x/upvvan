@@ -203,11 +203,11 @@ Postgres, bypassing every hook and route handler. Findings and their disposition
 
 ### Legal Metrology — was a live breach, now closed
 
-| Finding | Fix |
-|---|---|
-| **Charging above our own declared MRP.** Seed wrote `base × 1.21`, which is the top planter's *uplift*, not its total. XS SKUs sold **1.83×** the declared MRP, MD SKUs **10.05×** — on the same PDP that declared it. r.6(1)(e), extended online by r.6(10). | `skus_mrp_covers_ladder` trigger recomputes the ladder ceiling in SQL; seed and all 12 rows corrected. This was the single most serious finding. |
-| `''` accepted for all five text declarations — a published SKU rendered five of seven declarations as empty. `NOT NULL` does not stop `''`. | `skus_declarations_non_blank`, mirroring the `supplier_batches_bill_is_real` pattern that already existed here. |
-| No consumer-care phone/email on the PDP (r.6(2)). | `SiteFooter` renders entity, address, customer care and grievance contacts site-wide. |
+| Finding                                                                                                                                                                                                                                                       | Fix                                                                                                                                              |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Charging above our own declared MRP.** Seed wrote `base × 1.21`, which is the top planter's _uplift_, not its total. XS SKUs sold **1.83×** the declared MRP, MD SKUs **10.05×** — on the same PDP that declared it. r.6(1)(e), extended online by r.6(10). | `skus_mrp_covers_ladder` trigger recomputes the ladder ceiling in SQL; seed and all 12 rows corrected. This was the single most serious finding. |
+| `''` accepted for all five text declarations — a published SKU rendered five of seven declarations as empty. `NOT NULL` does not stop `''`.                                                                                                                   | `skus_declarations_non_blank`, mirroring the `supplier_batches_bill_is_real` pattern that already existed here.                                  |
+| No consumer-care phone/email on the PDP (r.6(2)).                                                                                                                                                                                                             | `SiteFooter` renders entity, address, customer care and grievance contacts site-wide.                                                            |
 
 ### The licence gate — a legal exposure that was one flag-flip away
 
@@ -272,10 +272,10 @@ thesis is honestly held.
 
 **`jsonb_each_text('...'::jsonb)` parses as an OPERATOR in Postgres**
 (`operator does not exist: record -> text`). The resulting broken function fired on
-every insert and update to `skus`, masking every *other* constraint on the table —
+every insert and update to `skus`, masking every _other_ constraint on the table —
 11 tests failed with a message that pointed nowhere near the real cause. A 4-row
 lookup table does not need to be clever.
 
-**A backtick inside a `sql\`...\`` comment terminates the template literal.** Cost
-two failed migrations with `Expected ")" but found "plantPriceForTier"` pointing at
+**A backtick inside a `sql\`...\``comment terminates the template literal.** Cost
+two failed migrations with`Expected ")" but found "plantPriceForTier"` pointing at
 SQL that was fine.

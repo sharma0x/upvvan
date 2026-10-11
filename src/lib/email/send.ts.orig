@@ -1,0 +1,31 @@
+/**
+ * Next.js instrumentation — runs once when the server process boots.
+ *
+ * Fails FAST here rather than at first request. A missing DATABASE_URL or a
+ * placeholder production secret should stop the deploy on the developer's
+ * machine, where it is cheap, not in front of a customer.
+ *
+ * `register()` must stay synchronous-safe: Next runs this in the Node runtime
+ * before the server accepts connections.
+ */
+export async function register(): Promise<void> {
+  if (process.env.NEXT_RUNTIME !== 'nodejs') return
+
+  const { assertConfigValid } = await import('./lib/config')
+  assertConfigValid()
+
+  /*
+   * Housekeeping, after the config has been validated.
+   *
+   * Deliberately second, and deliberately not awaited-blocking: `register()` runs
+   * before the server accepts connections, so anything slow here delays the first
+   * request of a deploy. One indexed UPDATE against a table that is normally a few
+   * hundred rows is not that, and it is worth knowing on boot rather than an hour
+   * later that a previous deploy left e-mails stranded.
+   *
+   * See `sweepStaleQueuedEmails`. It catches itself and logs; it can never stop the
+   * app booting.
+   */
+  const { sweepStaleQueuedEmails } = await import('./lib/email/send')
+  void sweepStaleQueuedEmails()
+}

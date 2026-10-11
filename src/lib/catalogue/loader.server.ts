@@ -2,7 +2,8 @@ import 'server-only'
 
 import { Pool } from 'pg'
 
-import { config } from '@/lib/config'
+import type { Facetable } from '@/lib/catalogue/facets'
+import { getPool as sharedPool } from '@/lib/db/pool'
 import {
   applyPlanter,
   priceLadder,
@@ -21,45 +22,27 @@ import {
  * Writes still go through Payload — this file writes nothing.
  */
 
-let pool: Pool | null = null
-
+/*
+ * Delegates to the ONE process-wide pool.
+ *
+ * There were nine module-level pools in this codebase — this one was `max: 20`,
+ * and `catalogue/loader.server.ts` was another `max: 20`, which is 40 connections
+ * from two modules before anything else loads. `next build` prerenders dozens of
+ * routes in parallel and died with
+ *
+ *     error: sorry, too many clients already
+ *     Error occurred prerendering page "/collections/plants-for-a-bright-room"
+ *
+ * A pool exists to REUSE connections. Nine pools reusing the same handful is not
+ * reuse; it is nine warm-up costs and nine places for a leak to hide. See
+ * `src/lib/db/pool.ts`.
+ *
+ * Kept as a thin wrapper rather than replaced at every call site: the callers are
+ * correct, and rewriting working call sites during an incident is how an incident
+ * becomes an outage.
+ */
 async function getPool(): Promise<Pool> {
-  if (!pool) {
-    /*
-     * A SECOND pool, separate from `src/lib/geo/loader.server.ts`.
-     *
-     * Worth knowing because it was the last cause of intermittent PDP 404s. With
-     * `max` unset, `pg` defaults to 10 connections. Under a request burst plus
-     * concurrent database work, requests queue; if the queue outlives the caller's
-     * timeout the query throws, and the PDP — which had no try/catch — rendered
-     * `notFound()`. A customer saw "this plant does not exist" when the truth was
-     * "the database was briefly busy".
-     *
-     * Measured: 6 of 27 requests 404'd while a database-backed suite ran. Raising
-     * `max`, bounding the wait, and logging idle-client errors fixed most of it;
-     * the rest is handled where the truth matters, in the PDP, by not converting a
-     * query failure into a factual claim about the catalogue.
-     *
-     * Two pools for one database is itself the underlying smell — the same
-     * connection budget is spent twice and neither pool knows about the other.
-     * Consolidating them is the correct fix and is recorded as a follow-up rather
-     * than done here, because `geo` and `catalogue` are loaded from different
-     * server contexts and sharing a module-level pool across them is a larger
-     * change than this fix warrants.
-     */
-    pool = new Pool({
-      connectionString: config.database.url,
-      max: 20,
-      connectionTimeoutMillis: 5_000,
-      idleTimeoutMillis: 10_000,
-    })
-    // Without this listener `pg` emits an unhandled 'error' on an idle client and
-    // Node exits — one dropped socket becomes a total outage.
-    pool.on('error', (err) => {
-      console.error('[catalogue] idle postgres client errored:', err.message)
-    })
-  }
-  return pool
+  return sharedPool()
 }
 
 /** Indian season for a city. March–June is the lethal window. */
@@ -77,6 +60,10 @@ export interface CatalogueItem {
   commonName: string
   botanicalName: string | null
   description: string | null
+  /** One line, the benefit, in our voice. On the card under the botanical name. */
+  summary: string | null
+  /** What actually arrives in the parcel, measured at the bench. */
+  benchNote: string | null
   sizeTier: SizeTier
   itemClass: 'plant' | 'planter' | 'consumable'
   basePricePaise: number
@@ -88,13 +75,36 @@ export interface CatalogueItem {
     colour: string | null
     upliftBp: number
   }>
+  /**
+   * Units on the bench right now.
+   *
+   * Present because `sku_stock` was enforced at checkout and shown NOWHERE on
+   * the storefront — so a customer could add a sold-out plant to a cart, pay for
+   * it, and only discover it at packing. That is the "sold out on an in-stock
+   * SKU" failure the audit found at Upvan, and it is the kind of thing that
+   * costs a one-star review and a support ticket.
+   */
+  stock: number
+  /** Aggregate rating. 0 with `ratingCount === 0` means "no reviews yet". */
+  rating: { average: number; count: number }
   care: {
     light: string
     waterIntervalDays: number
     soilMoistureTargetPct: number
     difficulty: string
     toxicity: string
+    /** The seven-field long-form guide. Drives `/care/[slug]`. */
+    guide: {
+      light: string | null
+      water: string | null
+      humidity: string | null
+      temperature: string | null
+      feeding: string | null
+      additional: string | null
+    }
   }
+  /** The three flags the collection pages derive their URLs from. */
+  traits: { edible: boolean; airPurifying: boolean; vastuFriendly: boolean }
   seasonal: { seasons: string[]; hardy: boolean } | null
   legal: {
     manufacturerName: string
@@ -111,10 +121,12 @@ export interface CatalogueItem {
 interface Row {
   sku_id: number
   sku_code: string
-  species_slug: string
+  species_slug: string | null
   common_name: string
   botanical_name: string | null
   description: string | null
+  summary: string | null
+  bench_note: string | null
   size_tier: SizeTier
   item_class: 'plant' | 'planter' | 'consumable'
   /**
@@ -125,11 +137,23 @@ interface Row {
    * assertion that proves it.
    */
   base_price_paise: string
-  care_light: string
-  care_water_interval_days: number
-  care_soil_moisture_target_pct: number
-  care_difficulty: string
-  care_toxicity: string
+  stock_on_hand: number
+  rating_average: string | null
+  rating_count: string | null
+  care_light: string | null
+  care_water_interval_days: number | null
+  care_soil_moisture_target_pct: number | null
+  care_difficulty: string | null
+  care_toxicity: string | null
+  guide_light: string | null
+  guide_water: string | null
+  guide_humidity: string | null
+  guide_temperature: string | null
+  guide_feeding: string | null
+  guide_additional: string | null
+  is_edible: boolean
+  is_air_purifying: boolean
+  is_vastu_friendly: boolean
   seasons: string[] | null
   hardy: boolean | null
   lm_manufacturer_name: string
@@ -176,17 +200,45 @@ export async function loadCatalogue(cityId: number): Promise<CatalogueItem[]> {
        s."id"                    AS sku_id,
        s."sku_code",
        sp."slug"                 AS species_slug,
-       sp."common_name",
+       /*
+        * A CONSUMABLE HAS NO SPECIES ROW, so sp.common_name is NULL for it --
+        * and the LEFT JOIN that made consumables reachable at all is what put
+        * it there. Before this COALESCE, sorting the catalogue crashed with
+        * "Cannot read properties of null (reading 'localeCompare')" on the
+        * homepage, which is how the whole soil-and-feed rail took the page
+        * down with it.
+        *
+        * The declared common name is the right fallback, not a workaround:
+        * skus.legal_metrology_common_name_declared is a Legal Metrology r.6(10)
+        * field that every SKU must carry anyway, so it is the one name we can
+        * guarantee exists for a non-plant. A DB CHECK
+        * (skus_declarations_non_blank) refuses a blank one.
+        */
+       COALESCE(sp."common_name", s."legal_metrology_common_name_declared") AS common_name,
        sp."botanical_name",
-       sp."description",
+       COALESCE(sp."description", s."description") AS description,
+       sp."summary",
+       sp."bench_note",
        s."size_tier",
        s."item_class",
        s."base_price_paise",
+       COALESCE(st."stock_on_hand", 0) AS stock_on_hand,
+       rv."average"              AS rating_average,
+       rv."count"                AS rating_count,
        sp."care_light",
        sp."care_water_interval_days",
        sp."care_soil_moisture_target_pct",
        sp."care_difficulty",
        sp."care_toxicity",
+       sp."care_guide_light"     AS guide_light,
+       sp."care_guide_water"     AS guide_water,
+       sp."care_guide_humidity"  AS guide_humidity,
+       sp."care_guide_temperature"  AS guide_temperature,
+       sp."care_guide_feeding"   AS guide_feeding,
+       sp."care_guide_additional" AS guide_additional,
+       COALESCE(sp."edible", false)      AS is_edible,
+       COALESCE(sp."air_purifying", false) AS is_air_purifying,
+       COALESCE(sp."vastu_friendly", false) AS is_vastu_friendly,
        (SELECT json_agg(ss."value" ORDER BY ss."value")
           FROM species_seasonal_availability av
           JOIN species_seasonal_availability_seasons ss ON ss.parent_id = av.id
@@ -203,11 +255,20 @@ export async function loadCatalogue(cityId: number): Promise<CatalogueItem[]> {
        s."legal_metrology_dimensions_height_cm"        AS lm_height,
        s."legal_metrology_dimensions_pot_diameter_cm" AS lm_pot_dia,
        s."legal_metrology_dimensions_spread_cm"       AS lm_spread
-     FROM "skus" s
-     JOIN "species" sp ON sp."id" = s."species_id"
-    WHERE s."is_published" = true
-      AND s."city_id" = $1
-    ORDER BY sp."common_name", s."size_tier"`,
+      FROM "skus" s
+      LEFT JOIN "species" sp ON sp."id" = s."species_id"
+      LEFT JOIN "sku_stock" st ON st."sku_id" = s."id"
+      LEFT JOIN (
+        SELECT "sku_id",
+               round(avg("rating"), 1) AS average,
+               count(*)::int          AS count
+          FROM "reviews"
+         WHERE "is_published" = true
+         GROUP BY "sku_id"
+      ) rv ON rv."sku_id" = s."id"
+     WHERE s."is_published" = true
+       AND s."city_id" = $1
+     ORDER BY sp."common_name", s."size_tier"`,
     [cityId],
   )
 
@@ -247,44 +308,96 @@ export async function loadCatalogue(cityId: number): Promise<CatalogueItem[]> {
   const items: CatalogueItem[] = []
 
   for (const row of rows) {
-    // Seasonal gate. No availability row means the species is not sold in this
-    // city at all — which is different from "out of season", and both mean the
-    // customer must not see it.
+    /*
+     * Seasonal gate.
+     *
+     * `seasons` is NULL for a consumable because it has no species row, and a
+     * NULL is NOT an empty array. The original code was:
+     *
+     *   const available = row.seasons ?? []
+     *   if (!available.some((s) => seasons.includes(s))) continue
+     *
+     * which is correct for a plant and silently DELETES every non-plant from
+     * the catalogue. Combined with the INNER JOIN above it, that made the
+     * homepage's entire "Soil, feed & tools" rail unreachable — dead code
+     * rendering a promise the database could not keep, and three seeded SKUs
+     * with no page at all.
+     *
+     * A consumable is not seasonal. Soil does not die in April. So the gate
+     * applies to plants only, and the rule is written so that a plant with an
+     * empty `seasons` array is still excluded (a species nobody has declared
+     * availability for is not sellable) while a consumable sails through.
+     */
     const available = row.seasons ?? []
-    if (!available.some((s) => seasons.includes(s as never))) continue
+    const isPlant = row.item_class === 'plant'
+    if (isPlant && !available.some((s) => seasons.includes(s as never))) continue
+
+    const basePricePaise = toPaise(row.base_price_paise, `${row.sku_code} base price`)
 
     const plant: PlantSpec = {
-      speciesId: row.species_slug,
+      speciesId: row.species_slug ?? row.sku_code,
       commonName: row.common_name,
-      basePricePaise: toPaise(row.base_price_paise, `${row.sku_code} base price`),
+      basePricePaise,
       sizeTier: row.size_tier,
       itemClass: row.item_class,
     }
 
     // The ladder is DERIVED here, never stored. One rule, applied per render —
     // which is why 24 variants need no 24 price rows to maintain.
-    const ladder = priceLadder(plant, planterSpecs)
+    //
+    // A consumable gets a ONE-row ladder. A bag of cocopeat has no planter
+    // option, and `priceLadder` would otherwise cheerfully offer it a
+    // "handmade stoneware, sage glaze" for ₹185 more — which is both nonsense
+    // and, on the PDP, an upsell for something that cannot be potted.
+    const ladder = isPlant ? priceLadder(plant, planterSpecs) : priceLadder(plant, [])
 
     items.push({
       skuId: String(row.sku_id),
       skuCode: row.sku_code,
-      slug: row.species_slug,
+      /*
+       * A consumable has no species, so it has no slug. It gets its SKU code,
+       * which is unique and stable. The alternative — leaving it null — makes
+       * every `/plant/[slug]` link undefined and 500s on a missing param.
+       */
+      slug: row.species_slug ?? row.sku_code,
       commonName: row.common_name,
       botanicalName: row.botanical_name,
       description: row.description,
+      summary: row.summary,
+      benchNote: row.bench_note,
       sizeTier: row.size_tier,
       itemClass: row.item_class,
-      basePricePaise: toPaise(row.base_price_paise, `${row.sku_code} base price`),
+      basePricePaise,
       ladder,
-      planters: planterRows.map((p) => byId.get(String(p.id))!),
-      care: {
-        light: row.care_light,
-        waterIntervalDays: row.care_water_interval_days,
-        soilMoistureTargetPct: row.care_soil_moisture_target_pct,
-        difficulty: row.care_difficulty,
-        toxicity: row.care_toxicity,
+      planters: row.item_class === 'plant' ? planterRows.map((p) => byId.get(String(p.id))!) : [],
+      stock: row.stock_on_hand,
+      rating: {
+        average: row.rating_average == null ? 0 : Number(row.rating_average),
+        count: row.rating_count == null ? 0 : Number(row.rating_count),
       },
-      seasonal: { seasons: available, hardy: row.hardy ?? false },
+      care: {
+        // A consumable has no care profile, and pretending otherwise would put
+        // "water every 7 days" under a bag of cocopeat. Nulls are honest.
+        light: row.care_light ?? '',
+        waterIntervalDays: row.care_water_interval_days ?? 0,
+        soilMoistureTargetPct: row.care_soil_moisture_target_pct ?? 0,
+        difficulty: row.care_difficulty ?? '',
+        toxicity: row.care_toxicity ?? '',
+        guide: {
+          light: row.guide_light,
+          water: row.guide_water,
+          humidity: row.guide_humidity,
+          temperature: row.guide_temperature,
+          feeding: row.guide_feeding,
+          additional: row.guide_additional,
+        },
+      },
+      traits: {
+        edible: row.is_edible,
+        airPurifying: row.is_air_purifying,
+        vastuFriendly: row.is_vastu_friendly,
+      },
+      seasonal: isPlant ? { seasons: available, hardy: row.hardy ?? false } : null,
       legal: {
         manufacturerName: row.lm_manufacturer_name,
         manufacturerAddress: row.lm_manufacturer_address,
@@ -306,6 +419,37 @@ export async function loadCatalogue(cityId: number): Promise<CatalogueItem[]> {
   }
 
   return items
+}
+
+/**
+ * Adapt a loader item to the facet shape.
+ *
+ * A separate function rather than having `CatalogueItem` implement `Facetable`:
+ * `CatalogueItem.entryPaise` would have to be a stored field, and then two
+ * sources of truth for the same number — one derived from the ladder, one
+ * copied. The conversion is the only place the two vocabularies meet, so it is
+ * the only place a mismatch can be caught.
+ */
+export function toFacetable(item: CatalogueItem): Facetable {
+  return {
+    id: item.skuId,
+    commonName: item.commonName,
+    botanicalName: item.botanicalName,
+    description: item.description,
+    slug: item.slug,
+    itemClass: item.itemClass,
+    sizeTier: item.sizeTier,
+    entryPaise: item.ladder[0]!.totalPaise,
+    stock: item.stock,
+    light: (item.care.light || 'bright_indirect') as Facetable['light'],
+    difficulty: (item.care.difficulty || 'moderate') as Facetable['difficulty'],
+    toxicity: (item.care.toxicity || 'pets') as Facetable['toxicity'],
+    waterIntervalDays: item.care.waterIntervalDays,
+    seasons: (item.seasonal?.seasons ?? []) as Facetable['seasons'],
+    edible: item.traits.edible,
+    airPurifying: item.traits.airPurifying,
+    vastuFriendly: item.traits.vastuFriendly,
+  }
 }
 
 /** Price for one specific planter choice, used by the cart. */

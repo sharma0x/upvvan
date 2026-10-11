@@ -60,7 +60,7 @@ export default function RouteError({
   console.error('[route-error]', error)
 
   return (
-    <main className="mx-auto flex min-h-[60vh] max-w-[640px] flex-col justify-center px-base py-3xl">
+    <main className="px-base py-3xl mx-auto flex min-h-[60vh] max-w-[640px] flex-col justify-center">
       <p className="text-label-caps text-clay m-0">Something broke on our side</p>
 
       <h1 className="mt-sm mb-0">This page did not load.</h1>
@@ -81,7 +81,7 @@ export default function RouteError({
         </p>
       )}
 
-      <div className="mt-lg flex flex-wrap gap-sm">
+      <div className="mt-lg gap-sm flex flex-wrap">
         <button
           type="button"
           onClick={reset}

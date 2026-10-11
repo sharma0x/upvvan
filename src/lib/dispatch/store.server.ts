@@ -55,12 +55,30 @@ import {
   snapshotPay,
 } from './assign'
 import { multiplierPreservesBandOrdering } from './pay'
+import { syncOrderToDispatch } from './order-sync'
+import { getPool as sharedPool } from '@/lib/db/pool'
 
-let pool: Pool | null = null
-
+/*
+ * Delegates to the ONE process-wide pool.
+ *
+ * There were nine module-level pools in this codebase — this one was `max: 20`,
+ * and `catalogue/loader.server.ts` was another `max: 20`, which is 40 connections
+ * from two modules before anything else loads. `next build` prerenders dozens of
+ * routes in parallel and died with
+ *
+ *     error: sorry, too many clients already
+ *     Error occurred prerendering page "/collections/plants-for-a-bright-room"
+ *
+ * A pool exists to REUSE connections. Nine pools reusing the same handful is not
+ * reuse; it is nine warm-up costs and nine places for a leak to hide. See
+ * `src/lib/db/pool.ts`.
+ *
+ * Kept as a thin wrapper rather than replaced at every call site: the callers are
+ * correct, and rewriting working call sites during an incident is how an incident
+ * becomes an outage.
+ */
 export async function getPool(): Promise<Pool> {
-  if (!pool) pool = new Pool({ connectionString: config.database.url })
-  return pool
+  return sharedPool()
 }
 
 /**
@@ -120,10 +138,38 @@ export interface RiderRow {
   maxDailyDrops: number | null
 }
 
-/** The projection a rider phone screen needs. Deliberately small: it is a phone. */
+/**
+ * The projection a rider phone screen needs.
+ *
+ * ── WHY IT CARRIES AN ADDRESS AND A PHONE, WHICH IT USED NOT TO ──────────────
+ *
+ * The rider's run showed the order code, the pincode, the zone and the pay. The
+ * delivery address and the customer's phone existed only in the dispatch E-MAIL.
+ *
+ * That made `/rider` unusable as a dispatch surface: a rider working a run from
+ * the app had to read an address off a phone screen in their other hand, and
+ * could not call the customer on arrival at all. The component comment for the
+ * code-entry step claims "the next action is ONE big button at the bottom of the
+ * screen, in thumb reach" — which is only true of the screen, not of the job.
+ *
+ * So the address and the number are in the projection now, and they are the two
+ * fields a rider uses most. Everything else here is still deliberately small.
+ *
+ * `customerPhone` is the customer's number and it is deliberately NOT the number
+ * the rider is signed in as: this project treats those as different subjects
+ * (C-1), and a rider must never be able to mark a delivery closed from their own
+ * account's identity.
+ */
 export interface DispatchRow {
   id: number
+  orderId: number
   orderCode: string
+  /** Who the parcel is for, and where. Both were missing before. */
+  customerName: string | null
+  customerPhone: string | null
+  addressLines: string[]
+  /** What is in the box — the rider is packing it off a shelf. */
+  itemSummary: string
   status: DispatchStatus
   bandCode: string
   bandPayPaise: Paise
@@ -168,7 +214,26 @@ export interface DashboardCounts {
 
 const DISPATCH_SELECT = `
   SELECT d."id",
+         d."order_id"                                     AS "orderId",
          o."order_code"                                   AS "orderCode",
+         o."customer_name"                                AS "customerName",
+         COALESCE(u."phoneNumber", o."customer_phone")     AS "customerPhone",
+         ARRAY_REMOVE(ARRAY[
+           NULLIF(btrim(o."address_line1"), ''),
+           NULLIF(btrim(o."address_line2"), ''),
+           NULLIF(btrim(o."address_landmark"), ''),
+           NULLIF(btrim(concat_ws(', ', o."address_city", o."pincode")), '')
+         ], NULL)                                         AS "addressLines",
+         (
+           SELECT string_agg(
+                    COALESCE(NULLIF(sp."common_name", ''), s."sku_code")
+                    || CASE WHEN s."size_tier" <> 'XS' THEN ' (' || s."size_tier" || ')' ELSE '' END,
+                    ', ' ORDER BY i."_order")
+             FROM "orders_items" i
+             LEFT JOIN "skus" s     ON s."id" = i."sku_id"
+             LEFT JOIN "species" sp ON sp."id" = s."species_id"
+            WHERE i."_parent_id" = o."id"
+         )                                                AS "itemSummary",
          d."status"::text                                 AS "status",
          d."band_code"                                    AS "bandCode",
          d."band_pay_paise"                               AS "bandPayPaise",
@@ -193,12 +258,20 @@ const DISPATCH_SELECT = `
     FROM "dispatches" d
     JOIN "orders" o ON o."id" = d."order_id"
     LEFT JOIN "zones" z ON z."id" = d."zone_id"
+    -- See the customerPhone comment on DispatchRow: a guest order has no
+    -- customer_id, so the order's own phone is the fallback.
+    LEFT JOIN "user" u ON u."id" = o."customer_id"
 `
 
 function mapDispatch(row: Record<string, unknown>): DispatchRow {
   return {
     id: Number(row.id),
+    orderId: Number(row.orderId),
     orderCode: String(row.orderCode),
+    customerName: row.customerName == null ? null : String(row.customerName),
+    customerPhone: row.customerPhone == null ? null : String(row.customerPhone),
+    addressLines: Array.isArray(row.addressLines) ? row.addressLines.map(String) : [],
+    itemSummary: row.itemSummary == null ? '' : String(row.itemSummary),
     status: row.status as DispatchStatus,
     bandCode: String(row.bandCode),
     bandPayPaise: toPaise(row.bandPayPaise, `Dispatch ${row.id} band_pay_paise`),
@@ -369,12 +442,93 @@ export async function listDispatchesForRider(
 }
 
 /**
+ * Drops assigned to this rider BEFORE `before` that are still not finished.
+ *
+ * ── WHY THIS EXISTS ─────────────────────────────────────────────────────────
+ *
+ * `listDispatchesForRider` is scoped to one day, because a run is a shift. That
+ * is right for the shift and wrong for the WORK: a drop assigned at 6:50pm for a
+ * 7pm slot, or one a rider could not attempt because the gate was shut, is
+ * invisible on both the rider's page and the dispatch board the next morning.
+ *
+ * The consequence is not cosmetic. The order stays `PAID`, the plant stays at the
+ * nursery, a rider is already named against it — and nobody can see it. The
+ * customer watching "Packed, and with your rider" is, in fact, watching a plant
+ * nobody is coming for.
+ *
+ * `NOT IN` over the three terminal states rather than an enumeration of the open
+ * ones: the failure mode is a NEW terminal status that this query forgets to
+ * exclude, which reads as "a completed delivery from Tuesday is still on my run".
+ * Excluding the closed states cannot fail that way.
+ *
+ * Band-ordered, same as the shift list, so a carried-over far drop does not
+ * appear above today's short ones — the sorting rule that keeps the best-paid
+ * work at the start of a run applies across days too.
+ */
+export async function listOpenDispatchesForRider(
+  riderId: string | number,
+  before: Date,
+): Promise<DispatchRow[]> {
+  const db = await getPool()
+  const { rows } = await db.query<Record<string, unknown>>(
+    `${DISPATCH_SELECT}
+      WHERE d."rider_id" = $1
+        AND d."assigned_at" < $2
+        AND d."status" NOT IN ('DELIVERED','FAILED','CANCELLED')
+      ORDER BY
+        (SELECT "min_km" FROM "delivery_bands" b
+          WHERE b."city_id" = o."city_id" AND b."code" = d."band_code") ASC,
+        d."assigned_at" ASC`,
+    [riderId, before],
+  )
+  return rows.map(mapDispatch)
+}
+
+/**
  * Today's dispatches for the ops board, plus orders that have NO rider yet.
  *
  * The unassigned set is a LEFT JOIN from `orders`, because "unassigned" is the
  * absence of a dispatch row — deriving it from a status column would mean a
  * second thing to keep in sync, and this is the question the whole console
  * exists to answer.
+ *
+ * ── THE UNASSIGNED SET IS NOT SCOPED TO TODAY, AND THAT IS THE POINT ─────────
+ *
+ * It used to end with `AND o."created_at" >= $2`, where `$2` was the start of
+ * today. That filter did not shorten the queue, it DELETED work from it — and
+ * permanently, because an order created yesterday is also outside tomorrow's
+ * window, so it never reappeared on any later day either.
+ *
+ * Found by an operator who could not assign a rider to a paid order:
+ *
+ *     UPV-RID-XZMY   PAID   captured   created 2026-10-06 04:11Z
+ *
+ * and then, by counting what the filter was hiding rather than by reading it:
+ *
+ *     paid, unassigned, no rider, Bengaluru
+ *     26 orders. Oldest: 2 days 18 hours.
+ *     visible in the queue: 3
+ *
+ * Twenty-three paid orders — money taken, plants at the nursery, nobody on the
+ * way — and not one of them reachable. The page's own header claims "the question
+ * an operator is answering is what is still unhandled … sorted oldest-first,
+ * because age is the risk", and the filter did the exact opposite of both halves:
+ * it hid the oldest orders permanently and hid the risk entirely.
+ *
+ * This is the same failure the file already names twice, in different words. A
+ * row that is stuck forever reads as work in progress; here it read as no work at
+ * all, which is worse, because a queue that looks empty invites the conclusion
+ * that the nursery is on top of things.
+ *
+ * So there is NO date predicate here. What bounds the query is `LIMIT 200` with
+ * `ORDER BY o."created_at" ASC`, and those two together are the correct shape for
+ * a backlog: the oldest work is at the top, so the 200 that fit are the 200 that
+ * matter, and anything beyond them is further away from a rider than the 200 that
+ * are shown. A backdated filter cannot be substituted for that ordering — it
+ * discards the head of the queue rather than deferring it.
+ *
+ * `day` is still a parameter because the ASSIGNED half of this function is
+ * genuinely a shift, and a run is a shift.
  */
 export async function loadBoard(
   cityId: string | number,
@@ -402,10 +556,34 @@ export async function loadBoard(
       WHERE o."city_id" = $1
         AND d."id" IS NULL
         AND o."status" NOT IN ('DELIVERED','RESOLVED','CANCELLED','CLAIM_REJECTED')
-        AND o."created_at" >= $2
+      /*
+       * PAID ONLY.
+       *
+       * The status filter above does not exclude PAYMENT_PENDING — it is not in
+       * the list — so an order whose money had never been taken appeared in the
+       * queue with a working Assign button. Verified in a browser:
+       *
+       *     POST /api/dispatch/assign { orderCode: 'UPV--LVN2OGU', distanceKm: 4 }
+       *     200 { ok: true, riderName: 'Asha', payoutPaise: 6000 }
+       *
+       * A rider dispatched for unpaid goods is cash-on-delivery through the back
+       * door, which is the one model this business refuses everywhere else (the
+       * orders_no_cod CHECK), and it additionally snapshotted 60 rupees of rider
+       * pay for a delivery that should never have happened.
+       *
+       * (No backticks in this comment: it lives inside a JS template literal,
+       * where one silently ends the string.)
+       *
+       * Migration 000019 now REFUSES such a dispatch at the schema layer, so this
+       * filter is no longer the only thing standing between an operator and an
+       * unpaid delivery — it is here so the operator is never offered a button
+       * that will be refused. Offering an action and then refusing it teaches the
+       * operator that the queue is unreliable.
+       */
+        AND o."payment_state" = 'captured'
       ORDER BY o."created_at" ASC
       LIMIT 200`,
-    [cityId, day.start],
+    [cityId],
   )
 
   return {
@@ -438,10 +616,9 @@ export interface UnassignedOrder {
 
 export async function getDispatch(id: string | number): Promise<DispatchRow | null> {
   const db = await getPool()
-  const { rows } = await db.query<Record<string, unknown>>(
-    `${DISPATCH_SELECT} WHERE d."id" = $1`,
-    [id],
-  )
+  const { rows } = await db.query<Record<string, unknown>>(`${DISPATCH_SELECT} WHERE d."id" = $1`, [
+    id,
+  ])
   return rows[0] ? mapDispatch(rows[0]) : null
 }
 
@@ -561,10 +738,45 @@ export async function loadDashboardCounts(
     `SELECT
        (SELECT COUNT(*) FROM "orders"
          WHERE "city_id" = $1 AND "created_at" >= $2 AND "created_at" < $3) AS "ordersToday",
-       (SELECT COUNT(*) FROM "orders" o
-         WHERE o."city_id" = $1 AND o."created_at" >= $2
-           AND o."status" NOT IN ('DELIVERED','RESOLVED','CANCELLED','CLAIM_REJECTED')
-           AND NOT EXISTS (SELECT 1 FROM "dispatches" d WHERE d."order_id" = o."id")) AS "unassigned",
+        /*
+         * THE SAME predicate loadBoard's unassigned query uses.
+         *
+         * It used to differ in two ways, and both made the tile lie:
+         *
+         *   · no payment_state filter, so orders whose money had NEVER been taken
+         *     counted here while the queue they linked to excluded them
+         *     (deliberately, after an unpaid dispatch actually shipped). Seven on
+         *     the tile above a queue listing four.
+         *   · no upper bound on created_at, so a future-dated order counted.
+         *
+         * A tile that disagrees with the page it links to is worse than no tile:
+         * it teaches an operator the number is not worth clicking. Both sides now
+         * read the same window and the same payment rule.
+         *
+         * ── AND THE WINDOW WAS WRONG FOR BOTH OF THEM ─────────────────────────
+         *
+         * The shared "created_at >= $2 AND < $3" that made the two agree is the
+         * same day-boundary filter loadBoard just lost, so agreeing on it made
+         * them agree on a lie. Measured on the day this was found:
+         *
+         *     tile: 3        paid, unassigned, no rider, in reality: 26
+         *
+         * which is 23 paid orders the operator could neither see nor count — and
+         * an operator who sees "3" has no reason to suspect anything, so the
+         * number is not merely wrong, it is actively reassuring.
+         *
+         * So "unassigned" is no longer a "today" count, for the same reason
+         * "claimsOpen" below is not: a backlog is not a daily event. Every tile
+         * around it still measures today, and should — an order placed today, a
+         * drop assigned today and a payout today are all genuinely about today.
+         * Only this one answers "what is still waiting", and waiting has no
+         * expiry date.
+         */
+        (SELECT COUNT(*) FROM "orders" o
+          WHERE o."city_id" = $1
+            AND o."payment_state" = 'captured'
+            AND o."status" NOT IN ('DELIVERED','RESOLVED','CANCELLED','CLAIM_REJECTED')
+            AND NOT EXISTS (SELECT 1 FROM "dispatches" d WHERE d."order_id" = o."id")) AS "unassigned",
        (SELECT COUNT(*) FROM "dispatches" d
          JOIN "orders" o ON o."id" = d."order_id"
         WHERE o."city_id" = $1 AND d."assigned_at" >= $2 AND d."assigned_at" < $3
@@ -573,10 +785,21 @@ export async function loadDashboardCounts(
          JOIN "orders" o ON o."id" = d."order_id"
         WHERE o."city_id" = $1 AND d."assigned_at" >= $2 AND d."assigned_at" < $3
           AND d."status" = 'DELIVERED') AS "delivered",
-       (SELECT COUNT(*) FROM "dispatches" d
-         JOIN "orders" o ON o."id" = d."order_id"
-        WHERE o."city_id" = $1 AND d."assigned_at" >= $2 AND d."assigned_at" < $3
-          AND o."status" = 'CLAIM_OPEN') AS "claimsOpen",
+       /*
+        * NOT scoped to "assigned today".
+        *
+        * A claim filed on an order delivered yesterday showed as zero here while
+        * being visible on the claim page — and the guarantee window is measured
+        * from DELIVERY, so yesterday's claims are precisely the ones about to
+        * expire. An open claim is also not a "today" event at all: it stays open
+        * until somebody decides it, which by definition crosses days.
+        *
+        * The claims console is the real worklist and this number is only the
+        * badge, so it counts every open claim in the city.
+        */
+       (SELECT COUNT(*) FROM "order_claims" c
+         JOIN "orders" o ON o."id" = c."order_id"
+        WHERE o."city_id" = $1 AND c."status" = 'OPEN') AS "claimsOpen",
        (SELECT COUNT(*) FROM "dispatches" d
          JOIN "orders" o ON o."id" = d."order_id"
         WHERE o."city_id" = $1 AND d."assigned_at" >= $2 AND d."assigned_at" < $3
@@ -665,7 +888,27 @@ export interface CreateDispatchArgs {
 }
 
 /** `assignDispatch`'s result plus the row it created. */
-export type CreatedDispatch = Assignment & { dispatchId: number }
+export type CreatedDispatch = Assignment & {
+  dispatchId: number
+  /**
+   * The customer's proof-of-delivery code, in plaintext, for THIS process only.
+   *
+   * ── WHY THE CODE IS RETURNED WHEN IT IS STORED HASHED ──────────────────────
+   *
+   * The dispatch row keeps only `delivery_otp_hash` and `delivery_otp_salt`,
+   * which is right: a leaked table must not let anyone close a delivery. But a
+   * code the customer is never actually SENT is not a control, it is an outage —
+   * the rider stands at the door, the customer has no code, and the drop cannot
+   * be closed. Before this was plumbed through, the OTP went to the `outbox`
+   * table and nowhere else, so in production no delivery could ever complete.
+   *
+   * So it is returned from the transaction to the process that needs to deliver
+   * it, and nowhere else: not logged, not returned by the HTTP response, not
+   * persisted. A caller that wants to be careless can be careless with a value it
+   * already had; the hashed column is still the only durable copy.
+   */
+  deliveryOtp: string | null
+}
 
 /**
  * Assign an order to a rider and SNAPSHOT the pay, in one transaction.
@@ -679,6 +922,9 @@ export type CreatedDispatch = Assignment & { dispatchId: number }
 export async function createDispatch(args: CreateDispatchArgs): Promise<CreatedDispatch> {
   const db = await getPool()
   const client = await db.connect()
+  // Declared OUTSIDE the try so the post-commit caller can be handed the code
+  // even on the paths where it was generated late in the transaction.
+  let deliveryOtp: string | null = null
   try {
     await client.query('BEGIN')
 
@@ -689,8 +935,30 @@ export async function createDispatch(args: CreateDispatchArgs): Promise<CreatedD
       orderCode: string
       phone: string | null
     }>(
+      /*
+       * `phone` is COALESCE(customer identity, the order's own column).
+       *
+       * It used to read `u."phoneNumber"` alone, via a LEFT JOIN to `user` — so
+       * for a GUEST order, `customer_id` is NULL, `phone` was NULL, and no
+       * proof-of-delivery code was ever generated or queued.
+       *
+       * That is not an edge case. The whole purchase flow is deliberately
+       * account-free — no sign-in before checkout, because every competitor that
+       * gates checkout loses the sale at that screen. So the PRIMARY path through
+       * this code produced a dispatch that could never be completed: the rider
+       * arrives, has no code to close the drop on, and the only way out is the
+       * exact "marked delivered but not received" complaint that dominates the
+       * audits.
+       *
+       * `orders.customer_phone` is the reliable source, and the schema guarantees
+       * it: `orders_captured_payment_has_contact` refuses a captured order with no
+       * phone, so a paid order always has one. The account phone is preferred
+       * when present because it is the identity-verified number; the order's own
+       * column is the fallback that makes guest checkout work.
+       */
       `SELECT o."id", o."city_id" AS "cityId", o."zone_id" AS "zoneId",
-              o."order_code" AS "orderCode", u."phoneNumber" AS "phone"
+              o."order_code" AS "orderCode",
+              COALESCE(u."phoneNumber", o."customer_phone") AS "phone"
          FROM "orders" o
          LEFT JOIN "user" u ON u."id" = o."customer_id"
         WHERE o."id" = $1
@@ -803,7 +1071,7 @@ export async function createDispatch(args: CreateDispatchArgs): Promise<CreatedD
     // was performed on a DIFFERENT rider. Re-check the forced one, or an
     // override becomes a way to overload a rider past what the zone allows.
     if (args.forcedRiderId != null) {
-      const zoneCap = chosen.zoneId == null ? null : (await loadZoneCapacity(chosen.zoneId))
+      const zoneCap = chosen.zoneId == null ? null : await loadZoneCapacity(chosen.zoneId)
       const cap = chosen.maxDropsPerDay ?? zoneCap
       if (cap != null) {
         const { rows: held } = await client.query<{ n: string }>(
@@ -851,7 +1119,8 @@ export async function createDispatch(args: CreateDispatchArgs): Promise<CreatedD
         // The band PAY is recorded as an event detail as well as on the row, so
         // a dispute about a rider's earnings can be settled from the ledger even
         // if the band table has since been rewritten.
-        bandSnapshotReason: 'band pay is snapshotted at assignment so later band edits cannot rewrite history',
+        bandSnapshotReason:
+          'band pay is snapshotted at assignment so later band edits cannot rewrite history',
       },
     })
 
@@ -867,17 +1136,39 @@ export async function createDispatch(args: CreateDispatchArgs): Promise<CreatedD
               "delivery_otp_sent_at" = now(),
               "delivery_otp_expires_at" = now() + ($3 || ' seconds')::interval
         WHERE "id" = $4`,
-      [hash, salt, String(config.auth.otpExpiresIn), dispatchId],
+      // `deliveryOtpExpiresIn`, NOT `otpExpiresIn`. See config.ts: the login OTP
+      // lifetime (5 minutes) applied here meant a drop assigned at 6pm could not
+      // be closed at 8pm, with no route anywhere to reissue it.
+      [hash, salt, String(config.auth.deliveryOtpExpiresIn), dispatchId],
     )
+    deliveryOtp = order.phone ? code : null
     if (order.phone) {
       await queueOtp(client, order.phone, order.orderCode, code)
       await appendEvent(client, {
         dispatchId,
         kind: 'OTP_SENT',
         actorKind: 'system',
-        detail: { channel: 'sms', expiresInSeconds: config.auth.otpExpiresIn },
+        detail: { channel: 'sms', expiresInSeconds: config.auth.deliveryOtpExpiresIn },
       })
     }
+
+    /*
+     * The customer's timeline gets the assignment too.
+     *
+     * Nothing on the dispatch path wrote `order_events` before this, so a
+     * customer's tracking timeline stopped at "Payment received" and stayed there
+     * through packing, collection, the road and the doorstep. See
+     * `./order-sync.ts` for the full account.
+     *
+     * Inside the transaction, so a dispatch with no timeline entry is impossible:
+     * the parcel exists and the customer can see it, or neither happened.
+     */
+    await syncOrderToDispatch(client, {
+      dispatchId,
+      orderId: order.id,
+      dispatchStatus: 'ASSIGNED',
+      actor: `ops:${args.actorLabel ?? 'dispatcher'}`,
+    })
 
     await client.query('COMMIT')
 
@@ -887,6 +1178,7 @@ export async function createDispatch(args: CreateDispatchArgs): Promise<CreatedD
     return {
       ...assignment,
       dispatchId,
+      deliveryOtp,
       riderId: chosen.id,
       riderName: chosen.name,
       zoneId: chosen.zoneId,
@@ -989,7 +1281,11 @@ export async function transitionStatus(args: {
     }
 
     const stampColumn =
-      args.to === 'PICKED_UP' ? 'picked_up_at' : args.to === 'OUT_FOR_DELIVERY' ? 'out_for_delivery_at' : null
+      args.to === 'PICKED_UP'
+        ? 'picked_up_at'
+        : args.to === 'OUT_FOR_DELIVERY'
+          ? 'out_for_delivery_at'
+          : null
 
     const { rows } = await client.query<Record<string, unknown>>(
       `UPDATE "dispatches"
@@ -1009,6 +1305,13 @@ export async function transitionStatus(args: {
       actorKind: args.actorKind,
       actorLabel: args.actorLabel ?? null,
       detail: args.failureReason ? { failureReason: args.failureReason } : {},
+    })
+
+    await syncOrderToDispatch(client, {
+      dispatchId: Number(args.dispatchId),
+      orderId: Number(current.orderId),
+      dispatchStatus: args.to,
+      actor: `rider:${args.actorLabel ?? 'rider'}`,
     })
 
     await client.query('COMMIT')
@@ -1052,11 +1355,23 @@ export async function verifyDeliveryOtp(args: {
 
     const { rows: dispatchRows } = await client.query<Record<string, unknown>>(
       `SELECT d."id", d."status"::text AS "status",
+              d."order_id" AS "orderId",
               d."rider_id" AS "riderId",
               d."delivery_otp_hash" AS "hash", d."delivery_otp_salt" AS "salt",
               d."delivery_otp_expires_at" AS "expiresAt",
               d."delivery_otp_attempts" AS "attempts",
-              o."order_code" AS "orderCode", u."phoneNumber" AS "phone"
+              o."order_code" AS "orderCode",
+              -- COALESCE for the GUEST ORDER case, same as createDispatch: a
+              -- guest has no customer_id, so reading the identity table alone
+              -- makes this look like a customer with no phone, and the rider is
+              -- then told, correctly but uselessly, that they cannot close the
+              -- drop. The refusal below is right; it was firing on orders that
+              -- never lacked a phone.
+              --
+              -- (No backticks in this comment: it sits inside a JS template
+              -- literal, where one silently ends the string. That is the exact
+              -- hazard scripts/check-silent-failures.mjs exists to catch.)
+              COALESCE(u."phoneNumber", o."customer_phone") AS "phone"
          FROM "dispatches" d
          JOIN "orders" o ON o."id" = d."order_id"
          LEFT JOIN "user" u ON u."id" = o."customer_id"
@@ -1197,15 +1512,25 @@ export async function verifyDeliveryOtp(args: {
       },
     })
 
-    // Keep the order's own status in step. It is a denormalised copy of the
-    // delivery state, but the storefront order page reads it, and a page showing
-    // "out for delivery" after the plant arrived is the exact complaint this
-    // whole system exists to prevent.
-    await client.query(
-      `UPDATE "orders" SET "status" = 'DELIVERED', "updated_at" = now()
-        WHERE "id" = (SELECT "order_id" FROM "dispatches" WHERE "id" = $1)`,
-      [args.dispatchId],
-    )
+    /*
+     * Keep the order in step — through the STATE MACHINE, and with a timeline
+     * entry.
+     *
+     * This used to be a raw `UPDATE orders SET status = 'DELIVERED'`, which was
+     * wrong twice: it bypassed `assertTransition` (`PAID → DELIVERED` is not a
+     * legal transition in the project's own table), and it wrote no
+     * `order_events` row. The second is what the customer saw: a page whose
+     * heading said "Delivered" above a timeline ending at "Payment received".
+     *
+     * `order-sync.ts` walks the legal transitions instead and appends one event
+     * per hop, in the same transaction as the delivery.
+     */
+    await syncOrderToDispatch(client, {
+      dispatchId: Number(args.dispatchId),
+      orderId: Number(row.orderId),
+      dispatchStatus: 'DELIVERED',
+      actor: `rider:${args.actorLabel ?? 'rider'}`,
+    })
 
     await client.query('COMMIT')
 
@@ -1218,20 +1543,61 @@ export async function verifyDeliveryOtp(args: {
   }
 }
 
-/** Reissue a delivery code. Staff-only in practice; the route enforces that. */
+/**
+ * Reissue a delivery code. Staff-only in practice; the route enforces that.
+ *
+ * ── WHY IT RETURNS THE CODE ─────────────────────────────────────────────────
+ *
+ * It used to return `{ expiresAt }` only, and queued the plaintext into the
+ * `outbox` table — which nothing drains, because there is no SMS gateway wired.
+ *
+ * So the function's entire effect was to invalidate the code the customer was
+ * holding and generate a new one that reached nobody. A dispatcher pressing
+ * "reissue" would have made the delivery strictly LESS closable.
+ *
+ * The plaintext now comes back out, exactly as `createDispatch` returns its
+ * `deliveryOtp`, and the route delivers it over the channel that already works.
+ * Hashing is for the DURABLE copy; the message has to carry the readable one.
+ */
 export async function reissueOtp(args: {
   dispatchId: string | number
   actorLabel?: string | null
-}): Promise<{ expiresAt: Date }> {
+}): Promise<{
+  expiresAt: Date
+  code: string
+  orderCode: string
+  phone: string
+  riderName: string | null
+}> {
   const db = await getPool()
   const client = await db.connect()
   try {
     await client.query('BEGIN')
-    const { rows } = await client.query<{ orderCode: string; phone: string | null; status: string }>(
-      `SELECT o."order_code" AS "orderCode", u."phoneNumber" AS "phone", d."status"::text AS "status"
+    const { rows } = await client.query<{
+      orderCode: string
+      phone: string | null
+      status: string
+      riderName: string | null
+    }>(
+      /*
+       * `COALESCE(u."phoneNumber", o."customer_phone")` for the same reason as
+       * `createDispatch` — a guest order has no `customer_id`, so reading the
+       * identity table alone reported "no phone on file" for an order that had
+       * one all along, and the rider was told they could not close the drop.
+       *
+       * That refusal is CORRECT when it is true, and it must stay: a delivery
+       * closed on no customer code is exactly the "marked delivered but not
+       * received" failure this whole control exists to prevent. It was just
+       * firing on orders that were never missing a phone.
+       */
+      `SELECT o."order_code" AS "orderCode",
+              COALESCE(u."phoneNumber", o."customer_phone") AS "phone",
+              d."status"::text AS "status",
+              r."name" AS "riderName"
          FROM "dispatches" d
          JOIN "orders" o ON o."id" = d."order_id"
          LEFT JOIN "user" u ON u."id" = o."customer_id"
+         LEFT JOIN "riders" r ON r."id" = d."rider_id"
         WHERE d."id" = $1
         FOR UPDATE OF d`,
       [args.dispatchId],
@@ -1239,7 +1605,10 @@ export async function reissueOtp(args: {
     const row = rows[0]
     if (!row) throw new TransitionError('That drop no longer exists.', 'NOT_FOUND', 404)
     if (row.status === 'DELIVERED') {
-      throw new TransitionError('This drop is already delivered; there is nothing to reissue.', 'ILLEGAL_TRANSITION')
+      throw new TransitionError(
+        'This drop is already delivered; there is nothing to reissue.',
+        'ILLEGAL_TRANSITION',
+      )
     }
     if (!row.phone) {
       throw new TransitionError(
@@ -1258,7 +1627,9 @@ export async function reissueOtp(args: {
               "delivery_otp_expires_at" = now() + ($3 || ' seconds')::interval
         WHERE "id" = $4
       RETURNING "delivery_otp_expires_at" AS "expiresAt"`,
-      [hash, salt, String(config.auth.otpExpiresIn), args.dispatchId],
+      // Same window as a first issue. See config.ts on why this is not the
+      // five-minute login OTP lifetime.
+      [hash, salt, String(config.auth.deliveryOtpExpiresIn), args.dispatchId],
     )
     await queueOtp(client, row.phone, row.orderCode, code)
     await appendEvent(client, {
@@ -1269,7 +1640,13 @@ export async function reissueOtp(args: {
       detail: { reissued: true, orderCode: row.orderCode },
     })
     await client.query('COMMIT')
-    return { expiresAt: updated[0]!.expiresAt }
+    return {
+      expiresAt: updated[0]!.expiresAt,
+      code,
+      orderCode: row.orderCode,
+      phone: row.phone,
+      riderName: row.riderName == null ? null : String(row.riderName),
+    }
   } catch (err) {
     await client.query('ROLLBACK')
     throw err

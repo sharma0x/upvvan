@@ -149,9 +149,35 @@ async function expectRefused(label: string, sql: string): Promise<string> {
  */
 async function newOrder(): Promise<number> {
   const { rows } = await db().query<{ id: number }>(
+    /*
+     * `payment_state = 'captured'`, because a dispatch now REQUIRES a paid order.
+     *
+     * Migration 000019 added a BEFORE INSERT trigger refusing a dispatch for an
+     * order whose payment was never captured — a rider was being dispatched to
+     * deliver goods nobody had paid for, which is cash-on-delivery through the
+     * back door. These fixtures were creating orders with no `payment_state` at
+     * all (the column has no default, so NULL), which made every proof below
+     * test an order that could no longer legally be dispatched.
+     *
+     * 'captured' is the right fixture for every dispatch proof here: they are all
+     * about dispatch mechanics — legal transitions, band pay, OTP, append-only
+     * events — and none of them is about payment. The refusal itself is proved in
+     * its own describe block at the end of this file, with its own unpaid order.
+     */
+    /*
+     * `customer_name` / `customer_phone` / `address_line1` are here because
+     * `orders_captured_payment_has_contact` refuses a CAPTURED order without them.
+     * They were not needed while this fixture was uncaptured, and the constraint is
+     * correct: a rider cannot be handed a delivery to a person the order does not
+     * name.
+     */
     `INSERT INTO "orders" ("order_code","city_id","status","payment_mode","pincode","zone_id",
-                            "revenue_paise","contribution_paise","guarantee_tier","updated_at","created_at")
-     VALUES ($1,$2,'PLACED','prepaid',$3,$4,0,0,'T0',now(),now()) RETURNING "id"`,
+                            "revenue_paise","contribution_paise","guarantee_tier",
+                            "payment_state","customer_name","customer_phone","address_line1",
+                            "updated_at","created_at")
+     VALUES ($1,$2,'PLACED','prepaid',$3,$4,0,0,'T0','captured',
+             'Dispatch Proof','9000000001','1 Test Road',now(),now())
+     RETURNING "id"`,
     [`UPV-DT-${stamp}-${orderSeq++}`, cityId, pincode, zoneId],
   )
   const id = rows[0]!.id
@@ -168,13 +194,13 @@ async function newOrder(): Promise<number> {
  * invariant 6 doing its job.
  */
 async function deliverLegitimately(id: number): Promise<void> {
-  await db().query(`UPDATE "dispatches" SET "status"='PICKED_UP', "picked_up_at"=now() WHERE "id"=${id}`)
+  await db().query(
+    `UPDATE "dispatches" SET "status"='PICKED_UP', "picked_up_at"=now() WHERE "id"=${id}`,
+  )
   await db().query(
     `UPDATE "dispatches" SET "status"='OUT_FOR_DELIVERY', "out_for_delivery_at"=now() WHERE "id"=${id}`,
   )
-  await db().query(
-    `UPDATE "dispatches" SET "delivery_otp_verified_at"=now() WHERE "id"=${id}`,
-  )
+  await db().query(`UPDATE "dispatches" SET "delivery_otp_verified_at"=now() WHERE "id"=${id}`)
   await db().query(
     `UPDATE "dispatches" SET "status"='DELIVERED', "delivered_at"=now() WHERE "id"=${id}`,
   )
@@ -407,13 +433,19 @@ describe('INVARIANT 3 · the ledger is append-only for EVERY role', () => {
       `INSERT INTO "dispatch_events" ("dispatch_id","kind","actor_kind","detail") VALUES ($1,'ASSIGNED','staff','{}')`,
       [id],
     )
-    await expectRefused('delete as owner', `DELETE FROM "dispatch_events" WHERE "dispatch_id"=${id}`)
+    await expectRefused(
+      'delete as owner',
+      `DELETE FROM "dispatch_events" WHERE "dispatch_id"=${id}`,
+    )
   })
 })
 
 describe('INVARIANT 4 · the pay snapshot is immutable', () => {
   const cases: Array<[string, string]> = [
-    ['the band rate', `UPDATE "dispatches" SET "band_pay_paise"=99900, "payout_paise"=99900 WHERE "id"=%d`],
+    [
+      'the band rate',
+      `UPDATE "dispatches" SET "band_pay_paise"=99900, "payout_paise"=99900 WHERE "id"=%d`,
+    ],
     ['the multiplier', `UPDATE "dispatches" SET "pay_multiplier_bp"=50000 WHERE "id"=%d`],
     ['the band code', `UPDATE "dispatches" SET "band_code"='C' WHERE "id"=%d`],
     ['the payout alone', `UPDATE "dispatches" SET "payout_paise"=1 WHERE "id"=%d`],
@@ -464,13 +496,19 @@ describe('INVARIANT 6 · legal transitions only, and no way back', () => {
     await db().query(
       `UPDATE "dispatches" SET "status"='FAILED', "failure_reason"='test' WHERE "id"=${id}`,
     )
-    await expectRefused('FAILED -> ASSIGNED', `UPDATE "dispatches" SET "status"='ASSIGNED' WHERE "id"=${id}`)
+    await expectRefused(
+      'FAILED -> ASSIGNED',
+      `UPDATE "dispatches" SET "status"='ASSIGNED' WHERE "id"=${id}`,
+    )
   })
 
   it('refuses un-delivering', async () => {
     const id = await makeDispatch()
     await deliverLegitimately(id)
-    await expectRefused('DELIVERED -> ASSIGNED', `UPDATE "dispatches" SET "status"='ASSIGNED' WHERE "id"=${id}`)
+    await expectRefused(
+      'DELIVERED -> ASSIGNED',
+      `UPDATE "dispatches" SET "status"='ASSIGNED' WHERE "id"=${id}`,
+    )
   })
 
   it('refuses a timestamp ordering that could not have happened', async () => {
@@ -549,3 +587,130 @@ describe('INVARIANT 9 · money is integer paise and matches its snapshot', () =>
     )
   })
 })
+
+/**
+ * A dispatch implies the money is in.
+ *
+ * ── WHAT THIS WAS, AND WHY IT IS A SEPARATE FILE ─────────────────────────────
+ *
+ * Found by clicking Assign on the queue in a browser, not by reading a test. The
+ * queue filtered on order STATUS only, and `PAYMENT_PENDING` is not in its
+ * exclusion list — so an order that had never been paid sat in the assign queue
+ * with a working button:
+ *
+ *     POST /api/dispatch/assign { orderCode: 'UPV--LVN2OGU', distanceKm: 4 }
+ *     200 { ok: true, riderName: 'Asha', payoutPaise: 6000 }
+ *
+ * That is cash-on-delivery through the back door, in a business whose entire
+ * rationale is that a COD return leg is a 25–30 day round trip for a plant that
+ * is unsellable on arrival. It also snapshotted the rider's pay for a delivery
+ * that should never have happened.
+ *
+ * Every existing suite passed. `assignDispatch` had no payment check, no test
+ * mentioned one, and the schema had no constraint — three layers all agreeing that
+ * dispatching an unpaid order was fine.
+ */
+describe('INVARIANT 10 · a dispatch requires a paid order', () => {
+  it('REFUSES a dispatch for an order whose payment was never captured', async () => {
+    const orderId = await unpaidOrder()
+
+    const message = await expectRefused(
+      'dispatch of an unpaid order',
+      `INSERT INTO "dispatches" ("order_id","rider_id","zone_id","status",
+                                   "band_code","band_pay_paise","pay_multiplier_bp","payout_paise","assigned_at")
+       VALUES (${orderId},${riderId},${zoneId},'ASSIGNED','A',4500,10000,4500,now())`,
+    )
+
+    expect(
+      message,
+      'The refusal exists but says nothing about WHY. An operator reading this must ' +
+        'be able to act on it, so it has to name the payment.',
+    ).toMatch(/not been paid|captured/i)
+  })
+
+  it('REFUSES when payment_state was never set at all', async () => {
+    /*
+     * `payment_state` has NO COLUMN DEFAULT, so an order created without one is
+     * NULL — which means "payment never captured", not "unknown".
+     *
+     * The first version of the trigger tested `payment_payment_state IS NULL` and
+     * returned early to let the foreign key report a missing order. That waved
+     * through exactly this case: an order with no payment_state at all could be
+     * dispatched without objection, which is the worst case of all because it is
+     * what every pre-existing order row looks like.
+     */
+    const orderId = await unpaidOrder(null)
+
+    await expectRefused(
+      'dispatch of an order with a NULL payment_state',
+      `INSERT INTO "dispatches" ("order_id","rider_id","zone_id","status",
+                                   "band_code","band_pay_paise","pay_multiplier_bp","payout_paise","assigned_at")
+       VALUES (${orderId},${riderId},${zoneId},'ASSIGNED','A',4500,10000,4500,now())`,
+    )
+  })
+
+  it('ALLOWS a dispatch once the payment is captured', async () => {
+    const orderId = await unpaidOrder('created')
+
+    // Same order, same rider, same zone — only the payment changed.
+    const { rows } = await db().query<{ id: number }>(
+      `UPDATE "orders" SET "payment_state" = 'captured' WHERE "id" = $1 RETURNING "id"`,
+      [orderId],
+    )
+    expect(rows[0]?.id).toBe(orderId)
+
+    const { rows: dispatch } = await db().query<{ id: number }>(
+      `INSERT INTO "dispatches" ("order_id","rider_id","zone_id","status",
+                                   "band_code","band_pay_paise","pay_multiplier_bp","payout_paise","assigned_at")
+       VALUES ($1,$2,$3,'ASSIGNED','A',4500,10000,4500,now()) RETURNING "id"`,
+      [orderId, riderId, zoneId],
+    )
+    expect(dispatch[0]!.id).toBeGreaterThan(0)
+  })
+
+  it('no unpaid order currently has a rider holding the goods', async () => {
+    const { rows } = await db().query<{ n: string }>(
+      `SELECT count(*)::text AS n
+         FROM "dispatches" d
+         JOIN "orders" o ON o."id" = d."order_id"
+        WHERE o."payment_state" IS DISTINCT FROM 'captured'
+          AND d."status" IN ('ASSIGNED','PICKED_UP','OUT_FOR_DELIVERY')`,
+    )
+    expect(
+      rows[0]!.n,
+      'An unpaid order has a rider holding the plants right now — the exact state ' +
+        'this constraint exists to prevent, and it predates the constraint.',
+    ).toBe('0')
+  })
+})
+
+/**
+ * An unpaid order, so the refusal can be proved without touching existing data.
+ *
+ * `paymentState` is `null` where the point of the test is that a missing
+ * payment_state means unpaid. Registered for teardown by the same list the rest
+ * of this file uses.
+ */
+async function unpaidOrder(paymentState: 'created' | null = 'created'): Promise<number> {
+  const { rows } = await db().query<{ id: number }>(
+    /*
+     * Contact details are present from the start even though this order is UNPAID,
+     * because the third proof in this block captures it — and
+     * `orders_captured_payment_has_contact` then refuses it without them.
+     *
+     * So the fixture is built to be able to BECOME paid without a second write.
+     * A fixture that cannot reach the state under test is a fixture that quietly
+     * tests the wrong thing.
+     */
+    `INSERT INTO "orders" ("order_code","city_id","status","payment_mode","pincode","zone_id",
+                            "revenue_paise","contribution_paise","guarantee_tier",
+                            "payment_state","customer_name","customer_phone","address_line1",
+                            "updated_at","created_at")
+     VALUES ($1,$2,'PAYMENT_PENDING','prepaid',$3,$4,0,0,'T0',$5,
+             'Unpaid Proof','9000000002','1 Test Road',now(),now())
+     RETURNING "id"`,
+    [`UPV-UNPAID-${stamp}-${orderSeq++}`, cityId, pincode, zoneId, paymentState],
+  )
+  createdOrders.push(rows[0]!.id)
+  return rows[0]!.id
+}

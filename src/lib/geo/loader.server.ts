@@ -1,4 +1,4 @@
-import { config as appConfig } from '@/lib/config'
+import { getPool as sharedPool } from '@/lib/db/pool'
 import {
   resolveServiceability,
   type CityRef,
@@ -56,43 +56,27 @@ export interface LoadedGeo {
   cityIdBySlug: Map<string, number>
 }
 
-let pool: import('pg').Pool | null = null
-
+/*
+ * Delegates to the ONE process-wide pool.
+ *
+ * There were nine module-level pools in this codebase — this one was `max: 20`,
+ * and `catalogue/loader.server.ts` was another `max: 20`, which is 40 connections
+ * from two modules before anything else loads. `next build` prerenders dozens of
+ * routes in parallel and died with
+ *
+ *     error: sorry, too many clients already
+ *     Error occurred prerendering page "/collections/plants-for-a-bright-room"
+ *
+ * A pool exists to REUSE connections. Nine pools reusing the same handful is not
+ * reuse; it is nine warm-up costs and nine places for a leak to hide. See
+ * `src/lib/db/pool.ts`.
+ *
+ * Kept as a thin wrapper rather than replaced at every call site: the callers are
+ * correct, and rewriting working call sites during an incident is how an incident
+ * becomes an outage.
+ */
 async function getPool(): Promise<import('pg').Pool> {
-  if (!pool) {
-    const { Pool } = await import('pg')
-    /*
-     * The pool is sized for a single-user dev machine, which is far too small for
-     * a real request burst — and the shortfall does not fail loudly. When every
-     * connection is checked out, `pg` QUEUES rather than rejects, so the request
-     * waits, and if the wait exceeds the caller's own timeout the error surfaces as
-     * a generic failure some way downstream of the pool.
-     *
-     * That downstream path was a 404. `loadCatalogue` throws on a query error, the
-     * PDP has no try/catch, and `notFound()` fires — so a transient connection
-     * problem presented to a customer as "this plant does not exist". Measured at
-     * 6 of 27 requests during a database-backed test run; a real site under
-     * traffic would do the same, and the symptom is a product that looks like it
-     * has no stock.
-     *
-     * `max` is raised and the failure made explicit. 20 is comfortable for a
-     * single Postgres 18 container and still bounded.
-     */
-    pool = new Pool({
-      connectionString: appConfig.database.url,
-      max: 20,
-      // Do not sit on a dead connection waiting for TCP to notice.
-      connectionTimeoutMillis: 5_000,
-      idleTimeoutMillis: 10_000,
-    })
-    // An idle-client error (server restart, network blip) must not take the
-    // process down. Without a listener `pg` emits an unhandled 'error' event and
-    // Node exits — which is a total outage from one dropped socket.
-    pool.on('error', (err) => {
-      console.error('[geo] idle postgres client errored:', err.message)
-    })
-  }
-  return pool
+  return sharedPool()
 }
 
 export async function loadGeo(): Promise<LoadedGeo> {
@@ -100,9 +84,22 @@ export async function loadGeo(): Promise<LoadedGeo> {
 
   const { rows } = await db.query<GeoRow>(`
     SELECT
+      /*
+       * The "state" column holds the state's NAME ("Karnataka") — cities has no
+       * separate code column, so stateCode and stateName are both that value.
+       * That is not a duplicated field, it is one column under two names for two
+       * consumers: a delivery label needs the printable name, and the operator
+       * error messages want it too.
+       *
+       * taxRateBp is per city because GST on a nursery plant is not the same
+       * everywhere, and a global default silently over-charges or under-charges
+       * a city that differs. NULL means "use the global default".
+       */
       (SELECT json_agg(json_build_object(
                 'id', id, 'slug', slug, 'name', name,
-                'stateCode', state, 'gstin', gstin, 'isActive', COALESCE(is_active, false)
+                'stateCode', state, 'stateName', state,
+                'taxRateBp', tax_rate_bp,
+                'gstin', gstin, 'isActive', COALESCE(is_active, false)
               ))
          FROM cities)                                                    AS cities,
       (SELECT COALESCE(json_agg(json_build_object(

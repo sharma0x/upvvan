@@ -56,6 +56,19 @@ export const auth = betterAuth({
 
   baseURL: config.auth.url,
 
+  /*
+   * The CSRF defence, and the reason a port mismatch is fatal rather than cosmetic.
+   *
+   * better-auth rejects any request whose `Origin` is not in this list, so with
+   * `NEXT_PUBLIC_SERVER_URL` pinned to :3100 and the app actually on :3000, every
+   * `sendOtp` died with "Invalid origin" and the customer was told our SMS gateway
+   * was down.
+   *
+   * The list comes from configuration, never from the request — trusting the
+   * incoming header would disable the check entirely.
+   */
+  trustedOrigins: [...config.server.origins],
+
   // Single source of truth, in the single Postgres 18 database (C-4). No second
   // datastore, no separate auth service — C-5.
   //
@@ -83,6 +96,36 @@ export const auth = betterAuth({
     // the migration succeeded, and the customer identity column did not exist.
     // The plugin owns `phoneNumber`, `phoneNumberVerified` and their UNIQUE
     // constraint, which is exactly the constraint C-1 depends on.
+    additionalFields: {
+      /*
+       * ── WHY THE CUSTOMER'S REAL EMAIL IS NOT `user.email` ─────────────────
+       *
+       * `user.email` is NOT NULL UNIQUE and carries a synthetic
+       * `phone-<digits>@identity.invalid` placeholder (see `getTempEmail`). It is
+       * a UNIQUENESS TOKEN, not a contact address, and the account page must
+       * never render it as one.
+       *
+       * The obvious fix — let the customer update `user.email` — is refused by
+       * better-auth outright: `updateUser` throws `EMAIL_CAN_NOT_BE_UPDATED`
+       * (dist/api/routes/update-user.mjs:52), and `changeEmail` requires an
+       * email-verification round trip with a `sendVerificationEmail` callback
+       * that does not exist in a phone-first business where the OTP already
+       * proved who they are.
+       *
+       * So the address a customer actually gives us lives in its own column.
+       * It is NEVER used to authenticate anything: the phone remains the only
+       * credential (C-1), this address only ever receives order updates, and it
+       * is deliberately NOT flagged verified — so nothing in the product can
+       * claim we have confirmed it. A customer who mistypes it gets fewer
+       * e-mails, and a stranger cannot sign in with it because there is no
+       * password flow to sign in with.
+       */
+      contactEmail: {
+        type: 'string',
+        required: false,
+        input: true,
+      },
+    },
   },
 
   // Passwordless. Stated explicitly rather than left to default, because this

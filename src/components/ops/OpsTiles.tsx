@@ -31,7 +31,7 @@ export interface OpsTile {
 
 export function OpsTiles({ tiles }: { tiles: OpsTile[] }) {
   return (
-    <ul className="grid list-none grid-cols-2 gap-sm p-0 sm:grid-cols-3 lg:grid-cols-6">
+    <ul className="gap-sm grid list-none grid-cols-2 p-0 sm:grid-cols-3 lg:grid-cols-6">
       {tiles.map((tile) => {
         const tone =
           tile.tone === 'good'
@@ -50,7 +50,7 @@ export function OpsTiles({ tiles }: { tiles: OpsTile[] }) {
               useless — and the visual tile already carries its label, so this
               adds the missing piece rather than repeating what is there.
             */}
-            <span className="block font-h2 leading-none" aria-hidden="true">
+            <span className="font-h2 block leading-none" aria-hidden="true">
               {tile.value}
             </span>
             <span className="text-label-caps text-ink-muted mt-sm block">{tile.label}</span>
@@ -63,7 +63,7 @@ export function OpsTiles({ tiles }: { tiles: OpsTile[] }) {
               <a
                 href={tile.href}
                 title={tile.why}
-                className={`block rounded-md border border-border p-base no-underline transition-colors hover:border-primary ${tone}`}
+                className={`border-border p-base hover:border-primary block rounded-md border no-underline transition-colors ${tone}`}
               >
                 <span className="sr-only">
                   {tile.label}: {tile.value}. {tile.why}
@@ -71,7 +71,7 @@ export function OpsTiles({ tiles }: { tiles: OpsTile[] }) {
                 {body}
               </a>
             ) : (
-              <div title={tile.why} className={`rounded-md border border-border p-base ${tone}`}>
+              <div title={tile.why} className={`border-border p-base rounded-md border ${tone}`}>
                 <span className="sr-only">
                   {tile.label}: {tile.value}. {tile.why}
                 </span>
@@ -121,7 +121,7 @@ const STATUS_WORDS: Record<string, string> = {
 export function StatusPill({ status }: { status: string }) {
   return (
     <span
-      className={`inline-block rounded-sm border border-border px-sm py-xs text-label-caps ${STATUS_STYLES[status] ?? 'bg-surface-card text-ink-muted'}`}
+      className={`border-border px-sm py-xs text-label-caps inline-block rounded-sm border ${STATUS_STYLES[status] ?? 'bg-surface-card text-ink-muted'}`}
     >
       {STATUS_WORDS[status] ?? status.replace(/_/g, ' ').toLowerCase()}
     </span>
@@ -131,7 +131,7 @@ export function StatusPill({ status }: { status: string }) {
 /** An empty state that says what to do next, not just that there is nothing. */
 export function EmptyState({ title, body }: { title: string; body: string }) {
   return (
-    <div className="rounded-md border border-border bg-surface-card p-xl text-center">
+    <div className="border-border bg-surface-card p-xl rounded-md border text-center">
       <p className="text-label-caps text-clay m-0">{title}</p>
       <p className="text-ink-muted mt-sm mb-0">{body}</p>
     </div>

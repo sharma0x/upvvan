@@ -1,8 +1,14 @@
 import { redirect } from 'next/navigation'
 
 import { formatPaise } from '@/lib/catalogue/pricing'
+import { config } from '@/lib/config'
+import { loadBusinessSettings } from '@/lib/settings/server'
 import { currentRider } from '@/lib/dispatch/session.server'
-import { listDispatchesForRider, todayRange } from '@/lib/dispatch/store.server'
+import {
+  listDispatchesForRider,
+  listOpenDispatchesForRider,
+  todayRange,
+} from '@/lib/dispatch/store.server'
 import { RiderDrop } from '@/components/rider/RiderDrop'
 
 /**
@@ -31,7 +37,21 @@ export default async function RiderRunPage() {
   if (!rider) redirect('/rider/signin')
 
   const day = todayRange()
-  const drops = await listDispatchesForRider(rider.id, day)
+  const [drops, settings] = await Promise.all([
+    listDispatchesForRider(rider.id, day),
+    loadBusinessSettings(),
+  ])
+
+  /*
+   * Carried-over work, counted separately.
+   *
+   * `listDispatchesForRider` filters on `assigned_at` within today, so a drop
+   * assigned yesterday that is still ASSIGNED is invisible on this page — the
+   * rider has no way to see it, and the dispatcher has no way to see it either.
+   * A plant sitting at the nursery with a rider already named against it is a
+   * plant that arrives tomorrow, and today.
+   */
+  const carryOver = await listOpenDispatchesForRider(rider.id, day.start)
 
   // Integer paise throughout. Summing formatted rupee strings is how a day's
   // total ends up a rupee short and a rider stops trusting the number.
@@ -44,24 +64,26 @@ export default async function RiderRunPage() {
 
   return (
     <>
-      <h1 className="mt-0 mb-xs">Today&rsquo;s run</h1>
-      <p className="text-ink-muted mt-0">
-        {drops.length === 0
+      <h1 className="mb-xs mt-0">Today&rsquo;s run</h1>
+      <p className="text-ink-muted mt-0" data-testid="run-summary">
+        {drops.length === 0 && carryOver.length === 0
           ? 'No drops assigned yet.'
-          : `${drops.length} ${drops.length === 1 ? 'drop' : 'drops'}, nearest first.`}
+          : `${drops.length + carryOver.length} ${
+              drops.length + carryOver.length === 1 ? 'drop' : 'drops'
+            }, nearest first${carryOver.length > 0 ? ` (${carryOver.length} from an earlier day)` : ''}.`}
       </p>
 
-      {drops.length > 0 && (
+      {(drops.length > 0 || carryOver.length > 0) && (
         <section
           aria-labelledby="tally"
-          className="mt-base rounded-md border border-border bg-surface-card p-base"
+          className="mt-base border-border bg-surface-card p-base rounded-md border"
         >
-          <h2 id="tally" className="text-label-caps text-ink-muted mt-0 mb-sm">
+          <h2 id="tally" className="text-label-caps text-ink-muted mb-sm mt-0">
             Your pay today
           </h2>
-          <dl className="m-0 flex gap-xl">
+          <dl className="gap-xl m-0 flex">
             <div>
-              <dt className="text-sm text-ink-muted">Earned</dt>
+              <dt className="text-ink-muted text-sm">Earned</dt>
               {/* formatPaise, not a hand-rolled `₹${x/100}`: a per-rider
                   multiplier can produce a payout that is not a whole rupee, and
                   flooring it here would show the rider less than they earned. */}
@@ -70,15 +92,15 @@ export default async function RiderRunPage() {
               </dd>
             </div>
             <div>
-              <dt className="text-sm text-ink-muted">Still to earn</dt>
+              <dt className="text-ink-muted text-sm">Still to earn</dt>
               <dd className="font-h2 mt-0 mb-0" data-testid="pending">
                 {formatPaise(pendingPaise)}
               </dd>
             </div>
           </dl>
-          <p className="text-sm text-ink-muted mt-sm mb-0">
-            Fixed per drop when it was assigned, so a rate change today will not change what you
-            are owed.
+          <p className="text-ink-muted mt-sm mb-0 text-sm">
+            Fixed per drop when it was assigned, so a rate change today will not change what you are
+            owed.
           </p>
         </section>
       )}
@@ -88,18 +110,28 @@ export default async function RiderRunPage() {
           Your drops
         </h2>
 
-        {drops.length === 0 ? (
-          <div className="rounded-md border border-border bg-surface-card p-xl text-center">
+        {drops.length === 0 && carryOver.length === 0 ? (
+          <div className="border-border bg-surface-card p-xl rounded-md border text-center">
             <p className="text-label-caps text-clay m-0">Nothing assigned</p>
             <p className="text-ink-muted mt-sm mb-0">
               When the dispatcher assigns you a drop it will appear here.
             </p>
           </div>
         ) : (
-          <ul className="m-0 grid list-none gap-sm p-0">
-            {drops.map((drop) => (
+          <ul className="gap-sm m-0 grid list-none p-0">
+            {[...carryOver, ...drops].map((drop) => (
               <li key={drop.id} className="m-0 p-0">
-                <RiderDrop drop={drop} />
+                {carryOver.some((c) => c.id === drop.id) && (
+                  <p className="text-label-caps text-clay mt-0 mb-1">
+                    From an earlier day &middot; assigned{' '}
+                    {drop.assignedAt.toLocaleDateString('en-IN')}
+                  </p>
+                )}
+                <RiderDrop
+                  drop={drop}
+                  otpLength={config.auth.otpLength}
+                  supportPhone={settings.customerCarePhone}
+                />
               </li>
             ))}
           </ul>

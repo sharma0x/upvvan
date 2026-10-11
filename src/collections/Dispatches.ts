@@ -51,7 +51,7 @@ export const Dispatches: CollectionConfig = {
     group: 'Operations',
     defaultColumns: ['order', 'rider', 'status', 'bandCode', 'payoutPaise', 'assignedAt'],
     description:
-      'One row per drop. The pay is snapshotted at assignment and cannot be rewritten; a delivery cannot be closed without the customer\'s code.',
+      "One row per drop. The pay is snapshotted at assignment and cannot be rewritten; a delivery cannot be closed without the customer's code.",
   },
   access: {
     read: ({ req: { user } }) => Boolean(user),
@@ -74,7 +74,9 @@ export const Dispatches: CollectionConfig = {
       required: true,
       unique: true,
       index: true,
-      admin: { description: 'One dispatch per order. Unique — this is what makes "unassigned" computable.' },
+      admin: {
+        description: 'One dispatch per order. Unique — this is what makes "unassigned" computable.',
+      },
     },
     {
       name: 'rider',
@@ -89,7 +91,8 @@ export const Dispatches: CollectionConfig = {
       relationTo: 'zones',
       admin: {
         readOnly: true,
-        description: "The rider's zone AT ASSIGNMENT, not a live join. Yesterday's dispatch says where the drop actually ran from.",
+        description:
+          "The rider's zone AT ASSIGNMENT, not a live join. Yesterday's dispatch says where the drop actually ran from.",
       },
     },
     {
@@ -164,7 +167,7 @@ export const Dispatches: CollectionConfig = {
       admin: {
         readOnly: true,
         description:
-          'The rider\'s multiplier in force at assignment. Stored so the arithmetic behind a payout is reproducible from this row alone. Frozen.',
+          "The rider's multiplier in force at assignment. Stored so the arithmetic behind a payout is reproducible from this row alone. Frozen.",
       },
     },
     {
@@ -191,7 +194,7 @@ export const Dispatches: CollectionConfig = {
       admin: {
         readOnly: true,
         description:
-          'The customer\'s code. Only the scrypt hash is stored — six digits have a million possibilities and this table is one SELECT away.',
+          "The customer's code. Only the scrypt hash is stored — six digits have a million possibilities and this table is one SELECT away.",
       },
       fields: [
         { name: 'hash', type: 'text', admin: { readOnly: true } },

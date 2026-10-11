@@ -25,7 +25,7 @@ export default async function NotFound() {
   }
 
   return (
-    <main className="mx-auto flex min-h-[60vh] max-w-[640px] flex-col justify-center px-base py-3xl">
+    <main className="px-base py-3xl mx-auto flex min-h-[60vh] max-w-[640px] flex-col justify-center">
       <p className="text-label-caps text-clay m-0">404</p>
 
       <h1 className="mt-sm mb-0">
@@ -34,12 +34,12 @@ export default async function NotFound() {
 
       <p className="text-ink-muted mt-base mb-0 max-w-[52ch]">
         Most likely it was a plant we have rotated out of season, or a link from an old order. We
-        swap the catalogue as the season turns rather than leaving dead pages behind, so a plant
-        you bought earlier may not be listed any more — it is still alive, we just do not sell that
-        one this month.
+        swap the catalogue as the season turns rather than leaving dead pages behind, so a plant you
+        bought earlier may not be listed any more — it is still alive, we just do not sell that one
+        this month.
       </p>
 
-      <div className="mt-lg flex flex-wrap gap-sm">
+      <div className="mt-lg gap-sm flex flex-wrap">
         <Link
           href="/"
           className="bg-primary text-surface rounded-sm px-6 py-4 font-semibold no-underline"

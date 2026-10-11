@@ -37,8 +37,7 @@ export default function AddressBook({ addresses }: { addresses: CustomerAddress[
   const [city, setCity] = useState('Bengaluru')
   const [pincode, setPincode] = useState('')
 
-  const FIELD =
-    'w-full rounded-sm border border-border bg-surface-raised px-3.5 py-3 text-base'
+  const FIELD = 'w-full rounded-sm border border-border bg-surface-raised px-3.5 py-3 text-base'
 
   async function submit(event: React.FormEvent) {
     event.preventDefault()
@@ -131,20 +130,15 @@ export default function AddressBook({ addresses }: { addresses: CustomerAddress[
   return (
     <section>
       {addresses.length === 0 && !open ? (
-        <div className="border-border bg-surface-raised rounded-md border p-lg">
+        <div className="border-border bg-surface-raised p-lg rounded-md border">
           <p className="mt-0">No saved addresses.</p>
-          <p className="text-ink-muted mb-0">
-            Save one and checkout gets shorter next time.
-          </p>
+          <p className="text-ink-muted mb-0">Save one and checkout gets shorter next time.</p>
         </div>
       ) : (
-        <ul className="m-0 flex list-none flex-col gap-base p-0">
+        <ul className="gap-base m-0 flex list-none flex-col p-0">
           {addresses.map((address) => (
-            <li
-              key={address.id}
-              className="border-border rounded-md border p-base"
-            >
-              <div className="flex flex-wrap items-baseline justify-between gap-xs">
+            <li key={address.id} className="border-border p-base rounded-md border">
+              <div className="gap-xs flex flex-wrap items-baseline justify-between">
                 <span className="font-semibold">{address.label}</span>
                 {address.isDefault && (
                   <span className="border-success bg-success-soft rounded-sm border px-2 py-0.5 text-xs font-semibold">
@@ -192,7 +186,10 @@ export default function AddressBook({ addresses }: { addresses: CustomerAddress[
       )}
 
       {error && (
-        <p role="alert" className="border-danger bg-surface text-danger mt-base rounded-sm border px-4 py-3">
+        <p
+          role="alert"
+          className="border-danger bg-surface text-danger mt-base rounded-sm border px-4 py-3"
+        >
           {error}
         </p>
       )}
@@ -206,7 +203,7 @@ export default function AddressBook({ addresses }: { addresses: CustomerAddress[
           Add an address
         </button>
       ) : (
-        <form onSubmit={submit} className="border-border mt-lg rounded-md border p-lg">
+        <form onSubmit={submit} className="border-border mt-lg p-lg rounded-md border">
           <h3 className="mt-0">Add an address</h3>
 
           <label htmlFor="label" className="text-label-caps text-ink-muted block">

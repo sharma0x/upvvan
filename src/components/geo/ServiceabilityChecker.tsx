@@ -1,23 +1,13 @@
 'use client'
 
-import { useState } from 'react'
-
+import { useEffect, useRef, useState } from 'react'
 import type { CityRef } from '@/lib/geo/serviceability'
+import { MicroSpinner } from '@/components/ui/MicroSpinner'
+import { ErrorBoundary } from '@/components/ui/ErrorBoundary'
 
 /**
  * The coverage checker.
- *
- * Large targets and an unambiguous result, for the same reason the packing bench
- * will need them later: this is a customer on a phone, often on a patchy
- * connection, reading "we do not deliver to your pincode yet" — and they will act
- * on it, by choosing a competitor. So the answer gets the same visual weight as
- * the question.
- *
- * All styling is Tailwind utilities referencing DESIGN.md tokens. There are no
- * literal colour values here: the palette is normative and lives in
- * src/app/theme.css, projected from DESIGN.md.
  */
-
 type Verdict =
   | { state: 'idle' }
   | { state: 'checking' }
@@ -37,6 +27,13 @@ export default function ServiceabilityChecker({ cities }: { cities: CityRef[] })
   const [pincode, setPincode] = useState('')
   const [citySlug, setCitySlug] = useState(cities[0]?.slug ?? '')
   const [verdict, setVerdict] = useState<Verdict>({ state: 'idle' })
+  const abortRef = useRef<AbortController | null>(null)
+
+  useEffect(() => {
+    return () => {
+      abortRef.current?.abort()
+    }
+  }, [])
 
   const canSubmit = pincode.length === 6 && verdict.state !== 'checking'
 
@@ -44,9 +41,16 @@ export default function ServiceabilityChecker({ cities }: { cities: CityRef[] })
     event.preventDefault()
     setVerdict({ state: 'checking' })
 
+    if (!citySlug) return
+
+    abortRef.current?.abort()
+    const controller = new AbortController()
+    abortRef.current = controller
+
     try {
       const res = await fetch(
         `/api/serviceability?pincode=${encodeURIComponent(pincode)}&city=${encodeURIComponent(citySlug)}`,
+        { signal: controller.signal },
       )
       const body = await res.json()
 
@@ -61,7 +65,8 @@ export default function ServiceabilityChecker({ cities }: { cities: CityRef[] })
             }
           : { state: 'done', serviceable: false, message: body.message },
       )
-    } catch {
+    } catch (err: unknown) {
+      if (err instanceof Error && err.name === 'AbortError') return
       setVerdict({
         state: 'error',
         message: 'Could not check that pincode. Please try again.',
@@ -70,7 +75,8 @@ export default function ServiceabilityChecker({ cities }: { cities: CityRef[] })
   }
 
   return (
-    <form onSubmit={check} className="mt-lg border-border bg-surface-raised p-lg rounded-md border">
+    <ErrorBoundary label="Coverage Checker">
+      <form onSubmit={check} className="mt-lg border-border bg-surface-raised p-lg rounded-md border">
       <label htmlFor="pincode" className="text-label-caps text-ink-muted block">
         6-digit pincode
       </label>
@@ -94,14 +100,33 @@ export default function ServiceabilityChecker({ cities }: { cities: CityRef[] })
         id="city"
         name="city"
         value={citySlug}
-        onChange={(e) => setCitySlug(e.target.value)}
+        onChange={(e) => {
+          setCitySlug(e.target.value)
+          // A different city invalidates the previous verdict. Leaving "We deliver to
+          // your pincode" on screen after the shopper switches city would be us
+          // answering about Bengaluru when they asked about Hyderabad.
+          setVerdict({ state: 'idle' })
+        }}
         className={`${FIELD} mt-xs`}
       >
+        {/*
+          Every city is listed, including ones we have not opened in.
+
+          The alternative is worse than useless: with a single option the dropdown
+          silently defaults to Bengaluru, so somebody in Telangana types their
+          pincode and is told the answer for the wrong city. Listing Hyderabad with
+          "not open here yet" gives them the true answer where they asked for it.
+
+          Active cities sort first so the common case needs no scrolling.
+        */}
         {cities.map((c) => (
           <option key={c.slug} value={c.slug}>
             {c.name}
+            {c.isActive ? '' : ' — not open here yet'}
           </option>
         ))}
+
+        {cities.length === 0 && <option value="">No cities to check yet</option>}
       </select>
 
       {/*
@@ -112,9 +137,16 @@ export default function ServiceabilityChecker({ cities }: { cities: CityRef[] })
       <button
         type="submit"
         disabled={!canSubmit}
-        className="mt-base bg-primary text-surface w-full cursor-pointer rounded-sm px-4 py-4 font-semibold disabled:cursor-not-allowed disabled:opacity-50"
+        className="mt-base bg-primary text-surface w-full cursor-pointer rounded-sm px-4 py-4 font-semibold disabled:cursor-not-allowed disabled:opacity-50 transition-transform active:scale-[0.99]"
       >
-        {verdict.state === 'checking' ? 'Checking…' : 'Check coverage'}
+        {verdict.state === 'checking' ? (
+          <span className="inline-flex items-center justify-center gap-2">
+            <MicroSpinner size="sm" />
+            <span>Checking…</span>
+          </span>
+        ) : (
+          'Check coverage'
+        )}
       </button>
 
       {verdict.state === 'done' && (
@@ -143,5 +175,6 @@ export default function ServiceabilityChecker({ cities }: { cities: CityRef[] })
         </p>
       )}
     </form>
+    </ErrorBoundary>
   )
 }

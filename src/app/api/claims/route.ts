@@ -4,6 +4,12 @@ import { clientIp } from '@/lib/orders/client-ip'
 import { appendEvent, db, normaliseCode, phoneTail } from '@/lib/orders/db'
 import { consume } from '@/lib/orders/rate-limit'
 import { assertTransition, canonicalStatus, IllegalTransitionError } from '@/lib/orders/status'
+import type { PoolClient } from 'pg'
+import { config } from '@/lib/config'
+import { loadBusinessSettings } from '@/lib/settings/server'
+import { sendEmail } from '@/lib/email/send'
+import { customerMailbox } from '@/lib/email/address'
+import { acknowledgement, adminAlert } from '@/lib/email/templates'
 
 /**
  * POST /api/claims — open a damage / DOA claim.
@@ -75,7 +81,9 @@ export async function POST(request: Request): Promise<NextResponse> {
    * support queue: an unbounded field here is a storage vector and a rendering
    * hazard in the admin panel, for no benefit to a person describing a crushed pot.
    */
-  const description = String(body.description ?? '').trim().slice(0, 1000)
+  const description = String(body.description ?? '')
+    .trim()
+    .slice(0, 1000)
   if (description.length < 10) {
     return NextResponse.json(
       { message: 'Please describe what arrived and what condition it is in.' },
@@ -94,7 +102,10 @@ export async function POST(request: Request): Promise<NextResponse> {
    * link) so the evidence is not lost in the meantime, and the column exists so the
    * upload path lands without a migration. Reported as a follow-up, not hidden.
    */
-  const evidenceUrl = String(body.evidenceUrl ?? '').trim().slice(0, 500) || null
+  const evidenceUrl =
+    String(body.evidenceUrl ?? '')
+      .trim()
+      .slice(0, 500) || null
 
   const limit = consume(clientIp(request), 'claim')
   if (!limit.allowed) {
@@ -112,8 +123,27 @@ export async function POST(request: Request): Promise<NextResponse> {
 
     // `FOR UPDATE` — the status is read and written in one transaction so two
     // simultaneous claims cannot both read DELIVERED and both claim it is the first.
-    const found = await client.query<{ id: number; order_code: string; status: string }>(
-      `SELECT "id", "order_code", "status"
+    /*
+     * `customer_name` and `customer_phone` are read HERE, in the same
+     * `FOR UPDATE` row read that decides whether the claim is allowed at all.
+     *
+     * They are needed for the acknowledgement, and this is the cheapest correct
+     * place to get them: the row is already locked, the alternative is a second
+     * query after the commit, and a claim about a customer we cannot name produces
+     * an acknowledgement to nobody.
+     *
+     * `customer_phone` is read straight off the order rather than through the
+     * `user` table — guest checkout is the primary path here (see the same
+     * COALESCE in `createDispatch`), so the identity table is usually NULL.
+     */
+    const found = await client.query<{
+      id: number
+      order_code: string
+      status: string
+      customer_name: string
+      customer_phone: string
+    }>(
+      `SELECT "id", "order_code", "status", "customer_name", "customer_phone"
          FROM "orders"
         WHERE "order_code" = $1
           AND right(regexp_replace("customer_phone"::text, '\\D', '', 'g'), 4) = $2
@@ -187,10 +217,7 @@ export async function POST(request: Request): Promise<NextResponse> {
       orderItemId = item.rows[0].id
     } else {
       await client.query('ROLLBACK')
-      return NextResponse.json(
-        { message: 'Tell us which plant arrived damaged.' },
-        { status: 400 },
-      )
+      return NextResponse.json({ message: 'Tell us which plant arrived damaged.' }, { status: 400 })
     }
 
     const claim = await client.query<{ id: number; status: string; created_at: Date }>(
@@ -214,6 +241,37 @@ export async function POST(request: Request): Promise<NextResponse> {
     })
 
     await client.query('COMMIT')
+
+    /*
+     * ── THE CLAIM ACKNOWLEDGEMENT, AFTER THE COMMIT ─────────────────────────
+     *
+     * A claim is filed at the exact moment somebody is most worried — a plant
+     * arrived dead, or nothing arrived at all — and the response the claim page
+     * shows them says a replacement will be sent. That promise is only credible
+     * if something arrives saying it is being acted on, and in this category the
+     * pattern after a complaint is silence. Kyari's 1.4/5 and Uravann's 2.1/10 are
+     * largely silence.
+     *
+     * The message restates the two things a claimant always wants to know and is
+     * never told: that they do NOT have to post the plant back, and what happens
+     * next. Both are already true in this system — a plant claim is a replacement
+     * and the returned plant would be unsellable — and neither was visible.
+     *
+     * Not awaited, for the same reason as every other notification: the claim row
+     * is committed and authoritative, and an SMTP outage must not turn a filed
+     * claim into an error that invites a duplicate filing.
+     */
+    void notifyClaim({
+      claimId: claim.rows[0]!.id,
+      orderCode: order.order_code,
+      kind,
+      description,
+      customerName: order.customer_name,
+      customerPhone: order.customer_phone,
+      items: await claimItemNames(client, order.id),
+    }).catch((err: unknown) => {
+      console.error('[claims] notification failed:', err)
+    })
 
     return NextResponse.json(
       {
@@ -313,4 +371,109 @@ export async function GET(request: Request): Promise<NextResponse> {
   }
 
   return NextResponse.json({ claims: res.rows }, { status: 200 })
+}
+
+/**
+ * What was claimed, in words a person can recognise.
+ *
+ * Read after the commit, on a released connection, so a descriptive lookup cannot
+ * hold a row lock on `order_claims` while it runs. Failing to name the plants is
+ * not worth failing the claim over — the acknowledgement falls back to the order
+ * code, which is enough to identify the conversation.
+ */
+async function claimItemNames(client: PoolClient, orderId: number): Promise<string[]> {
+  try {
+    const { rows } = await client.query<{ display_name: string }>(
+      `SELECT COALESCE(NULLIF(sp."common_name", ''), NULLIF(btrim(k."description"), ''), k."sku_code")
+                AS display_name
+         FROM "orders_items" i
+         JOIN "skus" k ON k."id" = i."sku_id"
+         LEFT JOIN "species" sp ON sp."id" = k."species_id"
+        WHERE i."_parent_id" = $1
+        ORDER BY i."_order"`,
+      [orderId],
+    )
+    return rows.map((r) => r.display_name)
+  } catch {
+    return []
+  }
+}
+
+/**
+ * The claim acknowledgement, and the alert to whoever sends the replacement.
+ *
+ * The owner's copy is a REPLACEMENT WORK ORDER, not a notification: which plants,
+ * which order, what the customer's own words were, and the claim id to quote on
+ * the replacement's own dispatch. A claim handled without that is just a refund
+ * request with extra steps.
+ */
+async function notifyClaim(input: {
+  claimId: number
+  orderCode: string
+  kind: string
+  description: string
+  customerName: string
+  customerPhone: string
+  items: string[]
+}): Promise<void> {
+  const settings = await loadBusinessSettings()
+  const base = config.server.url.replace(/\/$/, '')
+  const reference = `CLM-${input.claimId}`
+  const firstName = input.customerName.split(' ')[0] ?? input.customerName
+
+  const what = input.items.length > 0 ? input.items.join(', ') : input.orderCode
+
+  const ack = acknowledgement({
+    heading: 'Your claim is open',
+    reference,
+    firstName,
+    intro:
+      `Thank you — this is about ${what} on order ${input.orderCode}, and it is logged ` +
+      `against your guarantee.`,
+    whatNext: [
+      'Nothing goes back to us. Keep the plant and the pot exactly as they arrived.',
+      'One close-up plus one photo at arm’s length is all the evidence we need — send them on WhatsApp whenever you have a moment.',
+      'A grower looks at it. If it needs replacing we send a replacement; there is no refund step and nothing to post.',
+      `We will come back to you on ${input.customerPhone} or by WhatsApp. If it is urgent, call ${settings.customerCarePhone || 'us'}.`,
+    ],
+    replyInMinutes: settings.supportResponseMinutes,
+    supportPhone: settings.customerCarePhone || 'our published number',
+    contactUrl: `${base}/claim/${input.orderCode}`,
+  })
+
+  await sendEmail({
+    kind: 'claim_ack',
+    to: customerMailbox(input.customerName, input.customerPhone),
+    toName: input.customerName,
+    subject: ack.subject,
+    text: ack.text,
+    html: ack.html,
+  })
+
+  const ownerAddress = config.email.orderAlertsEmail || settings.customerCareEmail
+  if (ownerAddress) {
+    const alert = adminAlert({
+      heading: `Claim opened · ${input.kind.replace(/_/g, ' ')}`,
+      reference: `${reference} · ${input.orderCode}`,
+      summary: `${input.customerName} has claimed ${what}. Send a replacement — do not refund.`,
+      details: [
+        ['Order', input.orderCode],
+        ['Claimed', what],
+        ['Kind', input.kind],
+        ['Customer', `${input.customerName} · ${input.customerPhone}`],
+        ['Their words', input.description.slice(0, 300)],
+      ],
+      actionUrl: `${base}/admin/orders`,
+      actionLabel: 'Open the order',
+    })
+
+    await sendEmail({
+      kind: 'claim_admin_alert',
+      to: ownerAddress,
+      subject: alert.subject,
+      text: alert.text,
+      html: alert.html,
+      internal: true,
+    })
+  }
 }

@@ -19,6 +19,13 @@ import { SkuStock } from '@/collections/SkuStock'
 import { Species } from '@/collections/Species'
 import { SupplierBatches } from '@/collections/SupplierBatches'
 import { Orders } from '@/collections/Orders'
+import { Reviews } from '@/collections/Reviews'
+import { Posts } from '@/collections/Posts'
+import { Wishlists } from '@/collections/Wishlists'
+import { QuoteRequests } from '@/collections/QuoteRequests'
+import { ContactMessages } from '@/collections/ContactMessages'
+import { BusinessSettings } from '@/collections/BusinessSettings'
+import { EmailLog } from '@/collections/EmailLog'
 import { Riders } from '@/collections/Riders'
 import { Dispatches } from '@/collections/Dispatches'
 
@@ -39,6 +46,29 @@ const storageEnabled = Boolean(config.storage.endpoint && config.storage.bucket)
 export default buildConfig({
   admin: {
     user: Users.slug,
+    components: {
+      /*
+       * Puts the delivery desk one click away.
+       *
+       * The ops console is a SEPARATE app (`/admin-ops`) because it is built
+       * around zones, distance bands and a day's work rather than around records.
+       * But nothing pointed at it, so the person who signed in to manage the shop
+       * had no way to find the thing that dispatches the shop's orders — and asked
+       * where to navigate. The answer should not require prior knowledge.
+       */
+      /*
+       * BY PATH, not by import — see the note at the top of that component.
+       *
+       * The path uses the `@/` alias rather than being rooted at the project
+       * directory, because that is the form the import map records. An absolute
+       * `/src/...` path type-checks perfectly and then fails at runtime with
+       * "Module not found: Can't resolve '../../../src/components/…'" — the
+       * import map resolves relative to itself, not to the repository root.
+       *
+       * Requires `make generate-importmap` after adding or renaming the file.
+       */
+      afterNavLinks: ['@/components/admin/OpsConsoleLinks'],
+    },
     // MUST be plain JS at this exact path — src/app/(payload)/admin/importMap.js.
     // Not TypeScript, and not at (payload)/importMap.js. Getting this wrong
     // costs hours.
@@ -57,6 +87,23 @@ export default buildConfig({
     Skus,
     SkuStock,
     Orders,
+
+    /*
+     * Trust and acquisition. `Reviews` MUST be registered before anything that
+     * references it, and `Posts` before `Posts.relatedSpecies` — same rule as
+     * `Riders`/`Dispatches` below: Payload resolves `relationTo` against the
+     * REGISTERED collection set at boot, and with an unregistered target the
+     * build fails at typecheck before it reaches the database.
+     */
+    Reviews,
+    Posts,
+    Wishlists,
+    QuoteRequests,
+    ContactMessages,
+    // First in the list on purpose: it is the one screen a non-technical owner
+    // has to open, and Payload lists collections in declaration order.
+    BusinessSettings,
+    EmailLog,
 
     /*
      * Dispatch. `Riders` MUST be registered before `Dispatches` references it —

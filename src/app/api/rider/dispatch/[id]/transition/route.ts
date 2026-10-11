@@ -72,10 +72,7 @@ export async function POST(request: Request, { params }: Params): Promise<NextRe
     })
   } catch (err) {
     if (err instanceof TransitionError) {
-      return NextResponse.json(
-        { message: err.message, code: err.code },
-        { status: err.status },
-      )
+      return NextResponse.json({ message: err.message, code: err.code }, { status: err.status })
     }
 
     const raw = (err as { message?: string }).message ?? ''

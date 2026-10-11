@@ -89,7 +89,7 @@ export function RiderSignIn() {
           </p>
 
           <form onSubmit={onRequestCode} className="mt-lg">
-            <label htmlFor="phone" className="block text-label-caps text-ink-muted">
+            <label htmlFor="phone" className="text-label-caps text-ink-muted block">
               Phone number
             </label>
             <input
@@ -100,13 +100,13 @@ export function RiderSignIn() {
               autoComplete="tel"
               required
               placeholder="98450 00000"
-              className="mt-xs w-full rounded-sm border border-border bg-surface-card px-base py-base text-base"
+              className="mt-xs border-border bg-surface-card px-base py-base w-full rounded-sm border text-base"
             />
 
             <button
               type="submit"
               disabled={busy}
-              className="mt-lg w-full cursor-pointer rounded-sm bg-primary px-base py-base text-surface-card disabled:cursor-not-allowed disabled:opacity-60"
+              className="mt-lg bg-primary px-base py-base text-surface-card w-full cursor-pointer rounded-sm disabled:cursor-not-allowed disabled:opacity-60"
             >
               {busy ? 'Sending…' : 'Send my code'}
             </button>
@@ -117,16 +117,15 @@ export function RiderSignIn() {
           <p className="text-ink-muted mt-0">{message ?? 'Enter the code we texted you.'}</p>
 
           {devCode && (
-            <p className="mt-base rounded-md border border-warning bg-surface-raised p-base text-sm">
+            <p className="mt-base border-warning bg-surface-raised p-base rounded-md border text-sm">
               <strong className="text-warning">Development only.</strong> No SMS gateway is wired
-              yet, so your code is{' '}
-              <strong className="font-h2 text-base">{devCode}</strong>. This banner disappears when
-              a provider is connected.
+              yet, so your code is <strong className="font-h2 text-base">{devCode}</strong>. This
+              banner disappears when a provider is connected.
             </p>
           )}
 
           <form onSubmit={onVerify} className="mt-lg">
-            <label htmlFor="code" className="block text-label-caps text-ink-muted">
+            <label htmlFor="code" className="text-label-caps text-ink-muted block">
               Your code
             </label>
             <input
@@ -137,13 +136,13 @@ export function RiderSignIn() {
               autoComplete="one-time-code"
               required
               maxLength={6}
-              className="mt-xs w-full rounded-sm border border-border bg-surface-card px-base py-base text-center font-h2"
+              className="mt-xs border-border bg-surface-card px-base py-base font-h2 w-full rounded-sm border text-center"
             />
 
             <button
               type="submit"
               disabled={busy}
-              className="mt-lg w-full cursor-pointer rounded-sm bg-primary px-base py-base text-surface-card disabled:cursor-not-allowed disabled:opacity-60"
+              className="mt-lg bg-primary px-base py-base text-surface-card w-full cursor-pointer rounded-sm disabled:cursor-not-allowed disabled:opacity-60"
             >
               {busy ? 'Checking…' : 'Start my shift'}
             </button>
@@ -155,7 +154,7 @@ export function RiderSignIn() {
                 setError(null)
                 setDevCode(null)
               }}
-              className="mt-sm w-full cursor-pointer rounded-sm border border-border bg-surface-card px-base py-base"
+              className="mt-sm border-border bg-surface-card px-base py-base w-full cursor-pointer rounded-sm border"
             >
               Use a different number
             </button>
@@ -166,7 +165,7 @@ export function RiderSignIn() {
       {error && (
         <p
           role="alert"
-          className="mt-base rounded-sm border border-border bg-surface-raised p-sm text-sm text-danger"
+          className="mt-base border-border bg-surface-raised p-sm text-danger rounded-sm border text-sm"
         >
           {error}
         </p>

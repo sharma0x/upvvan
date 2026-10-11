@@ -45,7 +45,9 @@ beforeAll(async () => {
     await pool.query('SELECT 1')
     connected = true
   } catch (err) {
-    console.warn(`[catalogue-invariants] SKIPPED — cannot reach Postgres: ${(err as Error).message}`)
+    console.warn(
+      `[catalogue-invariants] SKIPPED — cannot reach Postgres: ${(err as Error).message}`,
+    )
   }
 })
 
@@ -89,7 +91,9 @@ beforeAll(async () => {
     connected = true
     await purgeTestData()
   } catch (err) {
-    console.warn(`[catalogue-invariants] SKIPPED — cannot reach Postgres: ${(err as Error).message}`)
+    console.warn(
+      `[catalogue-invariants] SKIPPED — cannot reach Postgres: ${(err as Error).message}`,
+    )
   }
 })
 
@@ -115,10 +119,18 @@ async function makeFixtures(slug: string) {
     // NOTE the `care_` prefix: Payload flattens a named group into prefixed
     // columns. Declaring the care profile inline without the prefix is the kind
     // of thing that looks right and fails on first run.
+    // `toxicity_witnessed_at` is NOT decoration: `species_toxicity_is_witnessed`
+    // (migration 000012) refuses a species claimed 'safe' without a date on it.
+    //
+    // This fixture was written before that constraint existed, so it inserted
+    // 'safe' with no witness and the whole suite died in `makeFixtures` — 20
+    // tests failing with a message about a fixture, not about the invariants
+    // they were written to prove. The constraint is right; a claim of safety
+    // needs a date behind it, so the fixture carries one.
     `INSERT INTO species (common_name, slug, care_light, care_water_interval_days,
                           care_soil_moisture_target_pct, care_difficulty, care_toxicity,
-                          updated_at, created_at)
-     VALUES ('Test Plant', $1, 'bright_indirect', 7, 40, 'easy', 'safe', now(), now())
+                          toxicity_witnessed_at, updated_at, created_at)
+     VALUES ('Test Plant', $1, 'bright_indirect', 7, 40, 'easy', 'safe', now(), now(), now())
      RETURNING id`,
     [`${slug}-species`],
   )
@@ -212,7 +224,9 @@ describe('catalogue schema invariants — illegal direct writes only', () => {
         if (!connected) return
         const f = await makeFixtures(`test-lm-miss-${column}`)
         try {
-          await expect(insertCompliantSku(f, `LM-MISS-${column}`, { [column]: null })).rejects.toThrow()
+          await expect(
+            insertCompliantSku(f, `LM-MISS-${column}`, { [column]: null }),
+          ).rejects.toThrow()
         } finally {
           await dropFixtures(f)
         }
@@ -247,6 +261,12 @@ describe('catalogue schema invariants — illegal direct writes only', () => {
           legal_metrology_dimensions_height_cm: null,
           legal_metrology_dimensions_pot_diameter_cm: null,
           legal_metrology_dimensions_spread_cm: null,
+          // A consumable is REQUIRED a description (`skus_consumable_states_what_it_is_for`).
+          // A plant is the opposite — it takes its description from the species row.
+          // So switching item_class also switches which of the two fields is
+          // mandatory, and the fixture has to say so explicitly or the test fails
+          // on the wrong constraint and appears to be about dimensions.
+          description: 'Potting mix for houseplants. One bag fills roughly three 6-inch pots.',
         })
         expect(rows).toHaveLength(1)
       } finally {
@@ -296,7 +316,9 @@ describe('catalogue schema invariants — illegal direct writes only', () => {
       if (!connected) return
       const f = await makeFixtures('test-lm-fracprice')
       try {
-        await expect(insertCompliantSku(f, 'LM-FRACP', { base_price_paise: 199.99 })).rejects.toThrow()
+        await expect(
+          insertCompliantSku(f, 'LM-FRACP', { base_price_paise: 199.99 }),
+        ).rejects.toThrow()
       } finally {
         await dropFixtures(f)
       }

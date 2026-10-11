@@ -59,15 +59,57 @@ const IDENTITY_COLUMNS = ['phone', 'phone_number', 'email', 'emailaddress']
 const STAFF_TABLE = 'users'
 
 /**
+ * Build the regex that matches `name: '<field>'` in a collection config.
+ *
+ * ── WHY THIS IS A FUNCTION AND NOT AN INLINE TEMPLATE ────────────────────────
+ * The caller had it inline as
+ *
+ *     new RegExp(`name:\s*['"\`]${field}['"\`]`)
+ *
+ * and inside a TEMPLATE LITERAL `\s` is a NonEscapeCharacter: ECMA-262 drops the
+ * backslash and yields the character `s`. That compiled to
+ *
+ *     name:s*['"`]email['"`]
+ *
+ * which cannot match `name: 'email'`, because of the single space after the
+ * colon. The offender loop therefore never fired, and C-1 assertion 3 — the
+ * guard on the codebase's most important invariant — passed unconditionally.
+ *
+ * It reported "clean" not because the schema was clean but because the check
+ * could not fail. Note the same file's `fieldBlockContaining` spelled the escape
+ * `\\s` and therefore worked: two copies of one rule, one of them a no-op, and
+ * nothing in the suite noticed. Hence one function, used by both.
+ *
+ * Ordinary string concatenation is used rather than another template literal,
+ * because `\\s` inside one is precisely the kind of subtlety that caused this.
+ */
+function fieldDeclarationPattern(field: string): RegExp {
+  // The field name is escaped rather than interpolated raw, so a future field
+  // containing regex metacharacters cannot silently widen the pattern.
+  const escaped = field.replace(/[.*+?^${}()|[\]\\]/g, String.raw`\$&`)
+  return new RegExp(String.raw`name:\s*['"\`]${escaped}['"\`]`)
+}
+
+/**
  * Extract the object literal that declares `name: '<field>'`, out to its
  * matching close brace. Used so the readOnly exemption applies to the specific
  * field rather than to the whole file — a whole-file pass would also excuse a
  * writable `email` added later, which is exactly the bug this test exists for.
  */
 function fieldBlockContaining(source: string, field: string): string {
-  const marker = new RegExp(`name:\\s*['"\`]${field}['"\`]`).exec(source)
+  const marker = fieldDeclarationPattern(field).exec(source)
   if (!marker) return ''
-  const open = source.indexOf('{', marker.index)
+
+  // BACKWARDS to the opening brace. This scanned FORWARDS, so for
+  //
+  //     { name: 'phone', type: 'text' },
+  //     { name: 'minimumQuantity', … },
+  //
+  // it returned the `minimumQuantity` block. Since the returned block gates the
+  // `readOnly: true` staff exemption, a writable `phone` sitting beside a
+  // read-only field was waved through — the exemption decided by a field it had
+  // nothing to do with.
+  const open = source.lastIndexOf('{', marker.index)
   if (open === -1) return source.slice(marker.index)
 
   let depth = 0
@@ -119,6 +161,27 @@ afterAll(async () => {
 const STAFF_COLLECTIONS = new Set(['Users.ts', 'Riders.ts'])
 
 /**
+ * Collections that hold a CONTACT for someone who is not yet a customer.
+ *
+ * ── WHY A LEAD IS NOT A SECOND IDENTITY OWNER ─────────────────────────────────
+ * C-1 says better-auth's `user` table is the only owner of customer identity.
+ * That is about identity — something you can authenticate as, and that orders
+ * and addresses can point at. A corporate enquiry is not that. `quote_requests`
+ * stores the work email and phone of a person who asked for a price list, and it
+ * has no session, no FK to `user`, and no path to becoming a session.
+ *
+ * The distinction is exactly the one the table names make: identity tables are
+ * referenced BY things (`orders.customer_id` → `user.id`), lead tables are
+ * referenced by nothing. The DB-level check below proves that empirically rather
+ * than taking the comment's word for it — it asserts that no foreign key anywhere
+ * in the database points at a lead table. Add one, and the exemption is wrong.
+ *
+ * Narrow on purpose: `LEAD_TABLES` must stay the shortest list that is true. A
+ * name added here without a reason belongs in a comment above, not in the set.
+ */
+const LEAD_COLLECTIONS = new Set(['QuoteRequests.ts'])
+
+/**
  * The same allowlist, in DATABASE terms.
  *
  * `STAFF_COLLECTIONS` names collection FILES for the static check over
@@ -128,6 +191,17 @@ const STAFF_COLLECTIONS = new Set(['Users.ts', 'Riders.ts'])
  * into a false C-1 breach.
  */
 const STAFF_TABLES = new Set(['users', 'riders'])
+
+/**
+ * The same lead allowlist in DATABASE terms, with the reasoning at
+ * `LEAD_COLLECTIONS`.
+ *
+ * Kept beside `STAFF_TABLES` rather than appended to it because the two are not
+ * the same claim: staff is "our people", a lead is "a stranger who asked". They
+ * are allowlisted together here only because the effect on this assertion is
+ * identical, and the distinction is worth preserving for whoever reads this next.
+ */
+const LEAD_TABLES = new Set(['quote_requests'])
 
 describe('C-1 · customer identity has exactly one owner', () => {
   describe('assertion 3 · no Payload collection declares a customer contact field', () => {
@@ -140,40 +214,67 @@ describe('C-1 · customer identity has exactly one owner', () => {
       for (const file of files) {
         const source = readFileSync(path.join(COLLECTIONS_DIR, file), 'utf8')
         for (const field of ['email', 'phoneNumber', 'phone']) {
-                const declaresField = new RegExp(`name:\s*['"\`]${field}['"\`]`).test(source)
-                if (!declaresField) continue
-                // A staff contact number is permitted and documented — riders need a
-                // number for shift dispatch. What must never exist is a WRITABLE
-                // contact field, because that is where a second customer record would
-                // be born. So the exemption is per-field-block and requires readOnly,
-                // not a whole-file pass.
-                const fieldBlock = fieldBlockContaining(source, field)
-                const isReadOnlyStaffField = file === 'Users.ts' && /readOnly:\s*true/.test(fieldBlock)
-                if (isReadOnlyStaffField) continue
+          const declaresField = fieldDeclarationPattern(field).test(source)
+          if (!declaresField) continue
+          // A staff contact number is permitted and documented — riders need a
+          // number for shift dispatch. What must never exist is a WRITABLE
+          // contact field, because that is where a second customer record would
+          // be born. So the exemption is per-field-block and requires readOnly,
+          // not a whole-file pass.
+          const fieldBlock = fieldBlockContaining(source, field)
+          const isReadOnlyStaffField = file === 'Users.ts' && /readOnly:\s*true/.test(fieldBlock)
+          if (isReadOnlyStaffField) continue
 
-                /*
-                 * STAFF collections are a second, narrow exemption, added when
-                 * `Riders.ts` landed.
-                 *
-                 * The comment above already states the rule — "a staff contact number is
-                 * permitted" — but the allowlist only ever named `Users.ts`, so adding a
-                 * rider collection failed this test. A rider's phone is how dispatch
-                 * reaches them during a shift; it is not customer identity and there is
-                 * no path from it to a customer row.
-                 *
-                 * The guard that matters is the one below: a STAFF collection must not
-                 * carry a customer relationship. If `Riders` ever gained a
-                 * `customer_id`, it would stop being a staff collection and this
-                 * exemption would correctly fall away — at which point its phone field
-                 * becomes a C-1 violation like any other.
-                 */
-                const isStaffCollection = STAFF_COLLECTIONS.has(file)
-                const isCustomerScoped = /name:\s*['"`]customerId['"`]/.test(source)
-                if (isStaffCollection && !isCustomerScoped) continue
+          /*
+           * STAFF collections are a second, narrow exemption, added when
+           * `Riders.ts` landed.
+           *
+           * The comment above already states the rule — "a staff contact number is
+           * permitted" — but the allowlist only ever named `Users.ts`, so adding a
+           * rider collection failed this test. A rider's phone is how dispatch
+           * reaches them during a shift; it is not customer identity and there is
+           * no path from it to a customer row.
+           *
+           * The guard that matters is the one below: a STAFF collection must not
+           * carry a customer relationship. If `Riders` ever gained a
+           * `customer_id`, it would stop being a staff collection and this
+           * exemption would correctly fall away — at which point its phone field
+           * becomes a C-1 violation like any other.
+           */
+          const isStaffCollection = STAFF_COLLECTIONS.has(file)
+          const isCustomerScoped = /name:\s*['"`]customerId['"`]/.test(source)
+          if (isStaffCollection && !isCustomerScoped) continue
 
-                offenders.push(`${file}: declares writable ${field}`)
-            }
-            }
+          /*
+           * LEAD collections are a third exemption, added when
+           * `QuoteRequests.ts` landed — and this one is NOT a formality.
+           *
+           * While C-1 assertion 3 was inert (see
+           * `fieldDeclarationPattern`) it flagged nothing at all, so the
+           * moment the escape was fixed the guard immediately reported a
+           * collection that genuinely does carry a writable email and
+           * phone. That is the guard working, and the finding is correct:
+           * `quote_requests` is a writable contact record.
+           *
+           * It is also not a C-1 violation. A corporate enquiry for 200
+           * units is a LEAD: there is no session, no FK to `user`, no
+           * order and no address pointing at it, and nothing that could
+           * ever authenticate as that record. Collecting the work email and
+           * phone of someone who asked for a price list is the entire
+           * function of the form.
+           *
+           * So it is allowlisted — narrowly, and with the same guard the
+           * staff exemption uses: a lead must not carry a customer
+           * relationship. Add `customerId` to `QuoteRequests` and it stops
+           * being a lead, this exemption falls away, and its contact fields
+           * become the violation they would then be.
+           */
+          const isLeadCollection = LEAD_COLLECTIONS.has(file)
+          if (isLeadCollection && !isCustomerScoped) continue
+
+          offenders.push(`${file}: declares writable ${field}`)
+        }
+      }
       expect(offenders, `Customer identity fields found in: ${offenders.join(', ')}`).toEqual([])
     })
 
@@ -253,7 +354,7 @@ describe('C-1 · customer identity has exactly one owner', () => {
        * set the static assertion above uses, plus the existing `STAFF_TABLE`.
        */
       const customerTables = [...byTable.keys()].filter(
-        (t) => t !== STAFF_TABLE && !STAFF_TABLES.has(t),
+        (t) => t !== STAFF_TABLE && !STAFF_TABLES.has(t) && !LEAD_TABLES.has(t),
       )
 
       expect(
@@ -264,6 +365,58 @@ describe('C-1 · customer identity has exactly one owner', () => {
 
       // And name it in the failure output so the fix is obvious.
       expect(customerTables[0]).toBe('user')
+
+      /*
+       * The lead exemption is a CLAIM, so it gets checked rather than trusted.
+       *
+       * `LEAD_TABLES` exists because a lead holds a contact but is not an
+       * identity owner. If that ever stops being true — because something grew a
+       * foreign key onto `quote_requests` and started treating it as an owner —
+       * the allowlist would be quietly wrong and this assertion would keep
+       * passing. So: prove no foreign key anywhere points at a lead table.
+       *
+       * This is the only assertion in the file that reads the catalogue, and it
+       * is worth the round trip: it converts a comment's reasoning into a fact
+       * the suite verifies.
+       */
+      const { rows: leadRefs } = await pool.query<{ table_name: string; column_name: string }>(
+        `SELECT cl.relname AS table_name, att.attname AS column_name
+           FROM pg_constraint con
+           JOIN pg_class cl ON cl.oid = con.conrelid
+           JOIN pg_class target ON target.oid = con.confrelid
+           JOIN pg_attribute att ON att.attrelid = con.conrelid AND att.attnum = con.conkey[1]
+          WHERE con.contype = 'f'
+            AND target.relname = ANY($1::text[])
+            /*
+             * Payload's own bookkeeping is not a claim on the record.
+             *
+             * Two kinds of foreign key point at EVERY collection and mean
+             * nothing: the _parent_id an array field's child table carries, and
+             * payload_locked_documents_rels, which Payload uses for document
+             * locking. Both were found by this assertion on its first run -- a
+             * reminder that a failing test is often the test being imprecise
+             * rather than the schema being wrong.
+             *
+             * So the assertion is about DOMAIN tables only, which is what the
+             * claim was always about: no part of the business treats a lead as
+             * an owner. payload_ is Payload's table prefix; <lead>_ is its
+             * array-child convention.
+             *
+             * (No backticks in this comment: it lives inside a JS template
+             * literal, where one silently ends the string. That is the exact
+             * hazard scripts/check-silent-failures.mjs exists to catch.)
+             */
+            AND cl.relname NOT LIKE 'payload!_%' ESCAPE '!'
+            AND cl.relname NOT LIKE target.relname || '!_%' ESCAPE '!'`,
+        [[...LEAD_TABLES]],
+      )
+      expect(
+        leadRefs,
+        `A foreign key points at a LEAD table: ${leadRefs
+          .map((r) => `${r.table_name}.${r.column_name}`)
+          .join(', ')}. ` +
+          `A lead is not a customer identity owner, so nothing may reference it as one.`,
+      ).toEqual([])
     })
 
     it('orders reference the customer owner by real FOREIGN KEY', async () => {

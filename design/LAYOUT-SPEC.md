@@ -10,20 +10,20 @@ shell — their page structure is **UNVERIFIED** and nothing here is attributed 
 
 ## 1. What the competitors actually do
 
-| Site | Hero | Then, in order | Ground | Primary |
-|---|---|---|---|---|
-| **Ugaoo** | Banner carousel, ≤450px title column | Offers for You → Beginner-friendly → room facets (Living/Bedroom/Balcony/Office) → newsletter → Most loved → **farm trust (Grown at our farm / 3-step quality check / Survival packaging / Arrives alive)** → New Arrivals → Ugaoo vs the Rest → gifting → Our Story | `#fff` | `#0a4c36` + `#ffd02a` yellow |
-| **Bloomscape** | "Bloomscape Your Space this Fall", then a **second** h1 "What kind of plant parent are you?" | 4 facet tiles (Low Light / Pet-Friendly / Statement / Easy Care) → Best Sellers → named-plant rows → **accessory rail (EcoPots, Grow Light, Mister…)** → plant quiz | `#fcf9f3` cream | `#224229` |
-| **The Sill** | "Fall Neutrals" seasonal, growing-zone zip prompt in the announcement bar | 3 nav mega-columns → size-led shop → outdoor collection → collections by size/solution/occasion | `#f7f7f7` | `#00ab84` teal + `#f43643` |
-| **Hey Rooted** | Split slideshow, 550px fixed height, title 60px→43px | Bundle & Save → Green Living Made Easy → **"Over 7,000 5-Star Reviews!"** → Best Sellers → subscription → New Arrivals → Pet Friendly → **30-Day Guarantee** | `#fff` | `#134431` |
-| **TrustBasket** | Store-name h1, category tiles | Shop by Collection → New Arrivals carousel → FAQ → **PRESS COVERAGE** → Gardening Kits | `#fff` | `#228654` + `#f6740a` |
-| **Foliage Factory** | — | — (indie, most tasteful palette: `#607359` on `#e2e0da`) | `#e2e0da` | `#607359` |
+| Site                | Hero                                                                                         | Then, in order                                                                                                                                                                                                                                                       | Ground          | Primary                      |
+| ------------------- | -------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------- | ---------------------------- |
+| **Ugaoo**           | Banner carousel, ≤450px title column                                                         | Offers for You → Beginner-friendly → room facets (Living/Bedroom/Balcony/Office) → newsletter → Most loved → **farm trust (Grown at our farm / 3-step quality check / Survival packaging / Arrives alive)** → New Arrivals → Ugaoo vs the Rest → gifting → Our Story | `#fff`          | `#0a4c36` + `#ffd02a` yellow |
+| **Bloomscape**      | "Bloomscape Your Space this Fall", then a **second** h1 "What kind of plant parent are you?" | 4 facet tiles (Low Light / Pet-Friendly / Statement / Easy Care) → Best Sellers → named-plant rows → **accessory rail (EcoPots, Grow Light, Mister…)** → plant quiz                                                                                                  | `#fcf9f3` cream | `#224229`                    |
+| **The Sill**        | "Fall Neutrals" seasonal, growing-zone zip prompt in the announcement bar                    | 3 nav mega-columns → size-led shop → outdoor collection → collections by size/solution/occasion                                                                                                                                                                      | `#f7f7f7`       | `#00ab84` teal + `#f43643`   |
+| **Hey Rooted**      | Split slideshow, 550px fixed height, title 60px→43px                                         | Bundle & Save → Green Living Made Easy → **"Over 7,000 5-Star Reviews!"** → Best Sellers → subscription → New Arrivals → Pet Friendly → **30-Day Guarantee**                                                                                                         | `#fff`          | `#134431`                    |
+| **TrustBasket**     | Store-name h1, category tiles                                                                | Shop by Collection → New Arrivals carousel → FAQ → **PRESS COVERAGE** → Gardening Kits                                                                                                                                                                               | `#fff`          | `#228654` + `#f6740a`        |
+| **Foliage Factory** | —                                                                                            | — (indie, most tasteful palette: `#607359` on `#e2e0da`)                                                                                                                                                                                                             | `#e2e0da`       | `#607359`                    |
 
 **Common to all six:** product carousel or category tiles in the first viewport;
 green primary; white or near-white ground; promises scattered; a nav of 12+ items.
 
 **In none of them:** a warm ground except Bloomscape; a delivery-coverage question
-above the fold; a number in the hero; an explanation of *why* the shipping model is
+above the fold; a number in the hero; an explanation of _why_ the shipping model is
 what it is; provenance framed as nearness.
 
 ---
@@ -56,7 +56,7 @@ persuaded by anything below it.
 
 **Why trust comes second, not last.** Ugaoo's farm trust block sits six sections
 down; TrustBasket's is a marquee; Bloomscape's guarantee lives in a support-site
-footer. All four of our promises are true *by structure* rather than by spend, so
+footer. All four of our promises are true _by structure_ rather than by spend, so
 putting them high costs nothing and is the actual differentiator.
 
 **Why provenance is near the end, not in the hero.** It is the strongest
@@ -69,6 +69,7 @@ argument about logistics to someone who has not yet decided they want a plant.
 ## 3. Section specs
 
 ### 1. Hero
+
 - `h1` 56px / weight **400** / tracking −0.02em. Not bold: at this size a bold
   serif reads as a newspaper masthead.
 - Eyebrow in `clay` — nothing there is an assertion, which is the rule that keeps
@@ -79,7 +80,9 @@ argument about logistics to someone who has not yet decided they want a plant.
   beneath the headline — the grid does not need restructuring.
 
 ### 2. Trust rail — `bg-forest`
+
 Four items, numbered 01–04, each with a linked CTA:
+
 1. Own nursery, own riders → `/policies`
 2. Free delivery, no minimum → `/policies`
 3. A human answers on WhatsApp → `/grievance`
@@ -92,6 +95,7 @@ Four items, numbered 01–04, each with a linked CTA:
 > category.
 
 ### 3. Room facets
+
 Bloomscape's four facets with one India substitution: **"Low Light" →
 "AC flat, no window."** Lux measurement false-negatives most of the Indian
 market, because the defining fact of an Indian rented flat is not low light, it is
@@ -106,6 +110,7 @@ listings; four dead-ended collection pages for a dozen products is worse than on
 honest grid. It shows `None in season` when a facet is empty rather than hiding it.
 
 ### 4. Catalogue
+
 Per card: size tier · light → name → botanical → **water interval + soil-moisture %**
 → pet/child safety → price. The water line is copied from Bloomscape's most
 transferable mechanic: "top 50–75% of the soil is dry" is testable, "water weekly"
@@ -121,6 +126,7 @@ Consumables sit in their own ochre rail — structurally higher margin, no
 mortality, no return leg, and the only line refunded in money rather than replaced.
 
 ### 5. Provenance — 4 steps
+
 Two acres inside the city → picked the same morning (never shipped wet) → ridden
 by our own people → arrived in one piece. Leads on **distance, not scale**: Ugaoo
 has 25 acres in Talegaon and ships nationally, Urvann has 8 farms and 500 riders
@@ -130,24 +136,24 @@ across 2 cities, and both are trying to make distance disappear.
 
 ## 4. Tokens changed
 
-| Token | Before | After | Why |
-|---|---|---|---|
-| `surface` | `oklch(0.995 0.004 145)` cool near-white | `oklch(0.978 0.012 85)` warm cream | 6 of 6 audited sites use cold white. Bloomscape's `#fcf9f3` was the only warm ground. |
-| `surface-card` | — | `oklch(0.992 0.008 85)` | Cards sit *lighter* than the page so they read as objects, not holes. `surface-raised` (darker) is for recessed wells only. |
-| `ink` | `oklch(0.22 0.008 145)` | `oklch(0.22 0.012 75)` | Warm neutrals; the old rule tinted them green, which fought the warm-ground idea. |
-| `forest` | — | `oklch(0.32 0.05 145)` | Hero/trust band ground. `primary` across a full-bleed band reads as a sale banner. |
-| `clay` | — | `oklch(0.55 0.12 45)` | Eyebrows + planters. **Never encodes a yes/no** — that is what keeps "green means yes" intact. |
-| `ochre` | — | `oklch(0.52 0.11 75)` | Consumables only. |
-| `brand-soft` | — | `oklch(0.93 0.03 145)` | **Bug fix.** See below. |
-| `h1` | 2rem / 600 / `ui-serif` | 3.5rem / 400 / named stack | `ui-serif` resolves differently per OS, so the site looked like a different brand per machine. |
-| `h2` | — | 2rem / 400 / named stack | Token existed but **no selector consumed it** — every section heading fell back to the browser's bold sans. |
+| Token          | Before                                   | After                              | Why                                                                                                                         |
+| -------------- | ---------------------------------------- | ---------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| `surface`      | `oklch(0.995 0.004 145)` cool near-white | `oklch(0.978 0.012 85)` warm cream | 6 of 6 audited sites use cold white. Bloomscape's `#fcf9f3` was the only warm ground.                                       |
+| `surface-card` | —                                        | `oklch(0.992 0.008 85)`            | Cards sit _lighter_ than the page so they read as objects, not holes. `surface-raised` (darker) is for recessed wells only. |
+| `ink`          | `oklch(0.22 0.008 145)`                  | `oklch(0.22 0.012 75)`             | Warm neutrals; the old rule tinted them green, which fought the warm-ground idea.                                           |
+| `forest`       | —                                        | `oklch(0.32 0.05 145)`             | Hero/trust band ground. `primary` across a full-bleed band reads as a sale banner.                                          |
+| `clay`         | —                                        | `oklch(0.55 0.12 45)`              | Eyebrows + planters. **Never encodes a yes/no** — that is what keeps "green means yes" intact.                              |
+| `ochre`        | —                                        | `oklch(0.52 0.11 75)`              | Consumables only.                                                                                                           |
+| `brand-soft`   | —                                        | `oklch(0.93 0.03 145)`             | **Bug fix.** See below.                                                                                                     |
+| `h1`           | 2rem / 600 / `ui-serif`                  | 3.5rem / 400 / named stack         | `ui-serif` resolves differently per OS, so the site looked like a different brand per machine.                              |
+| `h2`           | —                                        | 2rem / 400 / named stack           | Token existed but **no selector consumed it** — every section heading fell back to the browser's bold sans.                 |
 
 ---
 
 ## 5. Two real bugs found while doing this
 
 **`bg-brand-soft` did not exist.** `AddToCart.tsx`, `CartClient.tsx` and the PDP
-all used `bg-brand-soft` for the *selected* planter / size tier, but there was no
+all used `bg-brand-soft` for the _selected_ planter / size tier, but there was no
 `--color-brand-soft` in `theme.css` — so the class compiled to nothing and the
 selected pot had a border change with no ground. The planter ladder is our
 primary AOV mechanic (+29% to +121%), and its one selection cue was invisible.

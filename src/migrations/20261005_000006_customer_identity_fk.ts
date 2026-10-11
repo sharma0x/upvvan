@@ -72,7 +72,5 @@ export async function up({ db }: MigrateUpArgs): Promise<void> {
 }
 
 export async function down({ db }: MigrateDownArgs): Promise<void> {
-  await db.execute(
-    sql`ALTER TABLE "orders" DROP CONSTRAINT IF EXISTS "orders_customer_id_fk";`,
-  )
+  await db.execute(sql`ALTER TABLE "orders" DROP CONSTRAINT IF EXISTS "orders_customer_id_fk";`)
 }

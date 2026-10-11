@@ -1,10 +1,12 @@
-import { cookies } from 'next/headers'
+import { cookies, headers } from 'next/headers'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 
 import ClaimClient from './ClaimClient'
 import { db, loadOrderVerified, normaliseCode } from '@/lib/orders/db'
-import { orderCookieName, verifyOrderSignature } from '@/lib/orders/cookie'
+import { authoriseOrderAccess } from '@/lib/orders/access'
+import { guaranteeTerms } from '@/lib/commerce/guarantee'
+import { loadBusinessSettings } from '@/lib/settings/server'
 
 /**
  * `/claim/<code>` — report a damaged or dead plant.
@@ -50,22 +52,53 @@ export default async function ClaimPage({ params }: { params: Promise<{ code: st
   const { code } = await params
   const normalised = normaliseCode(code)
 
-  const jar = await cookies()
-  const signature = jar.get(orderCookieName(normalised))?.value
-  if (!signature || !verifyOrderSignature(normalised, signature)) {
-    // Not authorised. `notFound()` rather than a 403, because telling a stranger
-    // that this code exists but is not theirs is exactly the enumeration the
-    // randomised code exists to prevent.
-    notFound()
-  }
+  /*
+   * Authorisation is the signed order cookie OR a customer session that owns the
+   * order — `authoriseOrderAccess`, the same decision `/order/<code>` and
+   * `/invoice/<code>` make.
+   *
+   * This page used to accept the cookie alone, so a signed-in customer reached
+   * their own claim form only if they had separately done the code+phone lookup.
+   * Combined with `/account` having no link here, and `/order/<code>` linking here
+   * only when `status === 'DELIVERED'`, the practical effect was that a signed-in
+   * customer's route to reporting a problem ran through the guest lookup.
+   *
+   * `notFound()` rather than a 403 when neither credential is present: telling a
+   * stranger that this code exists but is not theirs is exactly the enumeration
+   * the randomised code exists to prevent.
+   */
+  const access = await authoriseOrderAccess(
+    normalised,
+    (await headers()).get('cookie') ?? undefined,
+  )
+  if (!access) notFound()
+  void (await cookies())
 
   const found = await loadOrderVerified(db(), normalised)
   if (!found) notFound()
 
   const { order, items } = found
 
+  /*
+   * The guarantee THIS order was sold at, and the claims already on it.
+   *
+   * Both were missing. The form used to print a hardcoded "48 hours" whatever tier
+   * the plant was sold on, and nothing anywhere told a returning customer that
+   * their claim already existed — so filing a second one produced a paragraph of
+   * writing and then a 409.
+   */
+  const terms = guaranteeTerms(order.guaranteeTier)
+  const settings = await loadBusinessSettings()
+  const claims = await db().query<{ id: number; kind: string; status: string }>(
+    `SELECT "id", "kind", "status"
+       FROM "order_claims"
+      WHERE "order_id" = (SELECT "id" FROM "orders" WHERE "order_code" = $1)
+      ORDER BY "created_at" DESC`,
+    [normalised],
+  )
+
   return (
-    <main className="mx-auto max-w-[560px] px-base py-2xl">
+    <main className="px-base py-2xl mx-auto max-w-[560px]">
       <Link
         href={`/order/${order.orderCode}`}
         className="text-primary text-sm no-underline hover:underline"
@@ -73,7 +106,7 @@ export default async function ClaimPage({ params }: { params: Promise<{ code: st
         ← Back to your order
       </Link>
 
-      <p className="text-label-caps text-ink-muted mb-0 mt-lg">Order {order.orderCode}</p>
+      <p className="text-label-caps text-ink-muted mt-lg mb-0">Order {order.orderCode}</p>
       <h1 className="my-sm">Tell us what arrived</h1>
 
       <p className="text-ink-muted">
@@ -93,6 +126,15 @@ export default async function ClaimPage({ params }: { params: Promise<{ code: st
           // wording. Showing it here prevents "I want a refund" on a plant, which we
           // could not honour anyway and which would then read as a refusal.
           refundable: i.itemClass !== 'plant',
+        }))}
+        guaranteeLabel={terms.label}
+        guaranteeDays={terms.days}
+        arrivalWindowHours={terms.arrivalWindowHours}
+        supportPhone={settings.customerCarePhone}
+        existingClaims={claims.rows.map((c) => ({
+          id: `CLM-${String(c.id).padStart(6, '0')}`,
+          kind: c.kind,
+          status: c.status,
         }))}
       />
     </main>

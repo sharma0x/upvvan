@@ -140,7 +140,6 @@ try {
     check(`${path} — has a <title>`, Boolean(doc.title), doc.title || 'EMPTY')
   }
 
-
   // ── Catalogue imagery renders at a real size ────────────────────────────────
   //
   // Added after every product photograph on the homepage collapsed to a 1x1 box
@@ -197,11 +196,7 @@ try {
   })
 
   check('catalogue has images', art.count > 0, `${art.count} img tags`)
-  check(
-    'every catalogue image downloaded',
-    art.loaded === art.count,
-    `${art.loaded}/${art.count}`,
-  )
+  check('every catalogue image downloaded', art.loaded === art.count, `${art.loaded}/${art.count}`)
   check(
     'every catalogue image RENDERS at a real size (not collapsed)',
     art.collapsed === 0,
@@ -209,7 +204,9 @@ try {
   )
 
   console.log(
-    failures === 0 ? '\n✅ All accessibility checks passed.\n' : `\n❌ ${failures} check(s) FAILED.\n`,
+    failures === 0
+      ? '\n✅ All accessibility checks passed.\n'
+      : `\n❌ ${failures} check(s) FAILED.\n`,
   )
 } finally {
   await browser.close()

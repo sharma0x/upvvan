@@ -109,10 +109,55 @@ export const config = {
     /** Derived so the port is set in exactly one place. */
     port: int('PORT', 3100),
     url: str('NEXT_PUBLIC_SERVER_URL', `http://localhost:${int('PORT', 3100)}`),
+
+    /**
+     * Origins the auth server will accept a request from.
+     *
+     * ── WHY THIS IS A LIST AND NOT `url` ───────────────────────────────────────
+     *
+     * `NEXT_PUBLIC_SERVER_URL` is the canonical, deployed origin and the one that
+     * belongs in `baseURL`. But it is also the value a developer's `.env` copied
+     * from `.env.example` carries forever, which means it can disagree with the port
+     * the app is actually running on.
+     *
+     * better-auth checks the `Origin` header against its trusted origins and
+     * refuses anything else — correctly, because that check is the CSRF defence.
+     * So with `NEXT_PUBLIC_SERVER_URL=http://localhost:3100` and `PORT=3000`, every
+     * auth call was rejected before it did anything:
+     *
+     *     [Better Auth]: Invalid origin: http://localhost:3000
+     *
+     * and the sign-in button reported "We could not send a code just now" — a
+     * message about our SMTP failing, caused entirely by a port mismatch. No OTP
+     * error, no 500, no failing test: the rejection is a clean 200 with an error
+     * body.
+     *
+     * The fix is to trust every origin this deployment can actually be served from,
+     * and to derive that list from CONFIG rather than from the incoming request. It
+     * is deliberately not a wildcard, and nothing here reads a header: widening this
+     * to "whatever the browser claims" would turn the CSRF defence off.
+     */
+    origins: [
+      str('NEXT_PUBLIC_SERVER_URL', `http://localhost:${int('PORT', 3100)}`),
+      `http://localhost:${int('PORT', 3100)}`,
+      `http://127.0.0.1:${int('PORT', 3100)}`,
+    ],
   },
 
   database: {
     url: process.env.DATABASE_URL ?? '',
+    /**
+     * Connections this process may open, for EVERY module.
+     *
+     * There is one pool in the application (`src/lib/db/pool.ts`) and this is its
+     * ceiling. It used to be per-module — nine pools, one of them `max: 20` —
+     * which is how `next build` came to fail with "sorry, too many clients
+     * already" while prerendering.
+     *
+     * Config, not a constant, so an operator who knows their database can raise it
+     * without touching code.
+     */
+    poolMax: int('DATABASE_POOL_MAX', 10),
   },
 
   payload: {
@@ -129,6 +174,37 @@ export const config = {
     /** OTP lifetime, seconds. Configurable because it is a commercial decision. */
     otpExpiresIn: int('AUTH_OTP_EXPIRES_IN', 300),
     otpLength: int('AUTH_OTP_LENGTH', 6),
+
+    /**
+     * The DELIVERY code's lifetime — the one a customer reads out at the door.
+     *
+     * ── WHY THIS IS NOT `otpExpiresIn` ────────────────────────────────────────
+     *
+     * It was, for as long as there was one. `otpExpiresIn` is 300 seconds, which
+     * is correct for a sign-in OTP and catastrophically wrong for this one:
+     *
+     *   `createDispatch` stamped `delivery_otp_expires_at = now() + otpExpiresIn`
+     *   at ASSIGNMENT.
+     *
+     * So the window to close a delivery began when a dispatcher clicked Assign —
+     * possibly at 6pm for an 8pm drop — and lasted five minutes. After that,
+     * `verifyDeliveryOtp` refused with `OTP_EXPIRED`, and the rider had exactly
+     * one remedy: `reissueOtp`. Which had no route, no button and no caller
+     * anywhere in the product, while three separate rider-facing error messages
+     * instructed them to "ask the dispatcher to reissue it".
+     *
+     * The honest lifetime is a DELIVERY WINDOW, not an OTP window: long enough
+     * to cover a run, short enough that a code found in a screenshot a week later
+     * is worthless. Twelve hours covers a full shift with room to spare.
+     *
+     * Separate from `otpExpiresIn` rather than sharing a larger value, because
+     * lengthening the sign-in OTP to twelve hours would be a real regression: a
+     * code sitting in a WhatsApp bubble would still work at lunchtime.
+     */
+    deliveryOtpExpiresIn: int('DELIVERY_OTP_EXPIRES_IN', 60 * 60 * 12),
+
+    /** A rider's shift. Long enough for a day, short enough to matter tomorrow. */
+    riderSessionTtlSeconds: int('RIDER_SESSION_TTL_SECONDS', 12 * 60 * 60),
     sessionExpiresIn: int('AUTH_SESSION_EXPIRES_IN', 60 * 60 * 24 * 30),
     sessionUpdateAge: int('AUTH_SESSION_UPDATE_AGE', 60 * 60 * 24),
     /** A customer must not be silently signed out mid-checkout. */
@@ -150,6 +226,35 @@ export const config = {
     password: process.env.SMTP_PASSWORD || undefined,
     from: str('EMAIL_FROM', 'hello@upvvan.local'),
     fromName: str('EMAIL_FROM_NAME', 'Upvvan'),
+
+    /**
+     * The domain customer-facing mail is addressed AT.
+     *
+     * Customers and riders do not have e-mail addresses — this is a phone-first
+     * business and the identity is an OTP on a mobile. So their mailboxes are
+     * synthesised: `meera.919000000001@mail.upvvan.local`, delivered over SMTP to
+     * Mailpit in dev and, in production, to whatever catches that domain.
+     *
+     * Read from config rather than from `process.env` at the call site. It was
+     * `process.env.CUSTOMER_EMAIL_DOMAIN` inside `lib/email/address.ts`, which is
+     * the exact thing this file exists to prevent: four routes were also reading
+     * `ORDER_ALERTS_EMAIL` directly, so there were five places in the application
+     * that decided where mail goes, and no single one to change.
+     */
+    customerDomain: str('CUSTOMER_EMAIL_DOMAIN', 'mail.upvvan.local'),
+
+    /**
+     * Where the owner's "something needs a person" alerts go.
+     *
+     * `ORDER_ALERTS_EMAIL` was read directly in four routes — new order, claim,
+     * contact message, quote request. All four are the messages that are worthless
+     * if nobody sees them, so a typo in one env var name silently disarmed one of
+     * them and nothing anywhere said so.
+     *
+     * Empty is allowed: `loadBusinessSettings().customerCareEmail` is the
+     * fallback, so an unset value still delivers somewhere sensible.
+     */
+    orderAlertsEmail: str('ORDER_ALERTS_EMAIL', ''),
   },
 
   /**

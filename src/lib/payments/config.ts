@@ -1,8 +1,5 @@
 import { config } from '@/lib/config'
-import {
-  DEFAULT_PAYMENT_GATEWAY_CONFIG,
-  type PaymentGatewayConfig,
-} from '@/lib/payments/gateway'
+import { DEFAULT_PAYMENT_GATEWAY_CONFIG, type PaymentGatewayConfig } from '@/lib/payments/gateway'
 
 /**
  * Payment configuration — read from `config`, with the keys reported rather than
@@ -26,12 +23,12 @@ import {
  *       provider: str('PAYMENT_SIMULATED_PROVIDER', 'simulated'),
  *       intentIdPrefix: str('PAYMENT_SIMULATED_INTENT_PREFIX', 'pi_sim_'),
  *       // Artificial capture latency, ms. Non-zero on purpose: a gateway that
-  *       // answers instantly trains you to ship a checkout with no pending state,
-  *       // which is exactly the bug that let the UI claim "Order placed" with no
-  *       // money moved.
-  *       latencyMs: int('PAYMENT_SIMULATED_LATENCY_MS', 350),
-  *       // How long a created intent stays capturable.
-  *       intentTtlMinutes: int('PAYMENT_INTENT_TTL_MINUTES', 30),
+ *       // answers instantly trains you to ship a checkout with no pending state,
+ *       // which is exactly the bug that let the UI claim "Order placed" with no
+ *       // money moved.
+ *       latencyMs: int('PAYMENT_SIMULATED_LATENCY_MS', 350),
+ *       // How long a created intent stays capturable.
+ *       intentTtlMinutes: int('PAYMENT_INTENT_TTL_MINUTES', 30),
  *       declineCodes: str('PAYMENT_SIMULATED_DECLINE_CODES',
  *         'CARD_DECLINED,INSUFFICIENT_FUNDS,AUTH_TIMEOUT')
  *         .split(',').map((c) => c.trim()).filter(Boolean),

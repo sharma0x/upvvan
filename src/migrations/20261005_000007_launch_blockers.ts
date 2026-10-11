@@ -129,9 +129,7 @@ export async function up({ db }: MigrateUpArgs): Promise<void> {
   // collection was relaxed, so relaxing the collection alone changed nothing —
   // the seed failed with `null value in column "species_id"`. Drop the column
   // constraint and replace it with the conditional one.
-  await db.execute(
-    sql`ALTER TABLE "skus" ALTER COLUMN "species_id" DROP NOT NULL;`,
-  )
+  await db.execute(sql`ALTER TABLE "skus" ALTER COLUMN "species_id" DROP NOT NULL;`)
   await db.execute(sql`
     DO $$
     BEGIN
@@ -431,45 +429,25 @@ export async function up({ db }: MigrateUpArgs): Promise<void> {
 }
 
 export async function down({ db }: MigrateDownArgs): Promise<void> {
-  await db.execute(
-    sql`DROP TRIGGER IF EXISTS trg_bands_need_tiers ON "delivery_bands";`,
-  )
-  await db.execute(
-    sql`DROP TRIGGER IF EXISTS trg_bands_contiguous ON "delivery_bands";`,
-  )
+  await db.execute(sql`DROP TRIGGER IF EXISTS trg_bands_need_tiers ON "delivery_bands";`)
+  await db.execute(sql`DROP TRIGGER IF EXISTS trg_bands_contiguous ON "delivery_bands";`)
   await db.execute(sql`DROP FUNCTION IF EXISTS delivery_bands_need_three_tiers();`)
   await db.execute(sql`DROP FUNCTION IF EXISTS delivery_bands_are_contiguous();`)
-  await db.execute(
-    sql`DROP TRIGGER IF EXISTS trg_order_city_may_trade ON "orders";`,
-  )
+  await db.execute(sql`DROP TRIGGER IF EXISTS trg_order_city_may_trade ON "orders";`)
   await db.execute(sql`DROP FUNCTION IF EXISTS orders_city_may_trade();`)
-  await db.execute(
-    sql`DROP TRIGGER IF EXISTS trg_order_guarantee_tier_enabled ON "orders";`,
-  )
+  await db.execute(sql`DROP TRIGGER IF EXISTS trg_order_guarantee_tier_enabled ON "orders";`)
   await db.execute(sql`DROP FUNCTION IF EXISTS orders_guarantee_tier_is_enabled();`)
-  await db.execute(
-    sql`DROP TRIGGER IF EXISTS trg_order_revenue_matches_own_lines ON "orders";`,
-  )
-  await db.execute(
-    sql`DROP TRIGGER IF EXISTS trg_orders_revenue_matches_lines ON "orders_items";`,
-  )
+  await db.execute(sql`DROP TRIGGER IF EXISTS trg_order_revenue_matches_own_lines ON "orders";`)
+  await db.execute(sql`DROP TRIGGER IF EXISTS trg_orders_revenue_matches_lines ON "orders_items";`)
   await db.execute(sql`DROP FUNCTION IF EXISTS orders_revenue_matches_lines();`)
   await db.execute(
     sql`ALTER TABLE "orders_items" DROP CONSTRAINT IF EXISTS "orders_items_price_is_paise";`,
   )
-  await db.execute(
-    sql`ALTER TABLE "orders" DROP CONSTRAINT IF EXISTS "orders_money_is_paise";`,
-  )
-  await db.execute(
-    sql`DROP TRIGGER IF EXISTS trg_sku_mrp_covers_ladder ON "skus";`,
-  )
+  await db.execute(sql`ALTER TABLE "orders" DROP CONSTRAINT IF EXISTS "orders_money_is_paise";`)
+  await db.execute(sql`DROP TRIGGER IF EXISTS trg_sku_mrp_covers_ladder ON "skus";`)
   await db.execute(sql`DROP FUNCTION IF EXISTS skus_mrp_covers_ladder();`)
-  await db.execute(
-    sql`ALTER TABLE "skus" DROP CONSTRAINT IF EXISTS "skus_declarations_non_blank";`,
-  )
-  await db.execute(
-    sql`ALTER TABLE "skus" DROP CONSTRAINT IF EXISTS "skus_plant_requires_species";`,
-  )
+  await db.execute(sql`ALTER TABLE "skus" DROP CONSTRAINT IF EXISTS "skus_declarations_non_blank";`)
+  await db.execute(sql`ALTER TABLE "skus" DROP CONSTRAINT IF EXISTS "skus_plant_requires_species";`)
   await db.execute(
     sql`ALTER TABLE "cities" DROP CONSTRAINT IF EXISTS "cities_active_requires_live_licence";`,
   )

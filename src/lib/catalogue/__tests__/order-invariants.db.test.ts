@@ -83,7 +83,9 @@ async function seedOrderFixtures() {
 async function cleanupOrderFixtures() {
   await exec(`DELETE FROM "orders_items" WHERE "id" LIKE 'TEST-%'`)
   await exec(`DELETE FROM "orders" WHERE "order_code" LIKE 'TEST-%'`)
-  await exec(`DELETE FROM "pincodes" WHERE "pincode" IN ('560048', '500001') AND "city_id" IN (SELECT "id" FROM "cities")`)
+  await exec(
+    `DELETE FROM "pincodes" WHERE "pincode" IN ('560048', '500001') AND "city_id" IN (SELECT "id" FROM "cities")`,
+  )
 }
 
 describe('order invariants — illegal direct writes only', () => {

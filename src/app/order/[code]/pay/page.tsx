@@ -48,11 +48,9 @@ export default async function PayPage({ params }: { params: Promise<{ code: stri
   const paid = order.paymentState === 'captured'
 
   return (
-    <main className="mx-auto max-w-[560px] px-base py-2xl">
+    <main className="px-base py-2xl mx-auto max-w-[560px]">
       <p className="text-label-caps text-ink-muted mb-0">Order {order.orderCode}</p>
-      <h1 className="my-sm">
-        {paid ? 'Already paid' : `Pay ${formatPaise(order.revenuePaise)}`}
-      </h1>
+      <h1 className="my-sm">{paid ? 'Already paid' : `Pay ${formatPaise(order.revenuePaise)}`}</h1>
 
       {paid ? (
         <>

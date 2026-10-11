@@ -37,12 +37,10 @@ export default function Hero({
   seasonNote: string
 }) {
   return (
-    <section className="mx-auto grid max-w-[1120px] grid-cols-1 items-start gap-xl px-base pt-2xl md:grid-cols-[1.25fr_1fr] md:pt-3xl">
+    <section className="gap-xl px-base pt-2xl md:pt-3xl mx-auto grid max-w-[1120px] grid-cols-1 items-start md:grid-cols-[1.25fr_1fr]">
       <div>
         {/* The three-part proof. Clay, because nothing here is being asserted. */}
-        <p className="text-label-caps text-clay m-0">
-          Own nursery · Own riders · {cityName}
-        </p>
+        <p className="text-label-caps text-clay m-0">Own nursery · Own riders · {cityName}</p>
 
         <h1 className="mt-sm mb-0">
           Plants that are grown
@@ -57,7 +55,7 @@ export default function Hero({
 
         <p className="text-ink-muted mt-base mb-0 max-w-[46ch] text-sm">{seasonNote}</p>
 
-        <div className="mt-lg flex flex-wrap items-center gap-sm">
+        <div className="mt-lg gap-sm flex flex-wrap items-center">
           <a
             href="#catalogue"
             className="bg-primary text-surface cursor-pointer rounded-sm px-6 py-4 font-semibold no-underline"
@@ -79,8 +77,8 @@ export default function Hero({
           feature, and it pre-empts the single most common checkout objection.
         */}
         <p className="text-ink-muted mt-lg mb-0 max-w-[46ch] text-sm">
-          <strong className="text-ink">Prepaid only.</strong> No cash on delivery — a returned
-          plant arrives dead and cannot be sold again, so we do not create the return leg.
+          <strong className="text-ink">Prepaid only.</strong> No cash on delivery — a returned plant
+          arrives dead and cannot be sold again, so we do not create the return leg.
         </p>
       </div>
 
@@ -88,11 +86,11 @@ export default function Hero({
         The coverage gate. Visually the most prominent object on the page, by
         design — see the note above.
       */}
-      <div className="border-border bg-surface-card rounded-lg border p-lg">
-        <h2 className="mb-0 text-label-caps text-ink-muted">Do we deliver to you?</h2>
+      <div className="border-border bg-surface-card p-lg rounded-lg border">
+        <h2 className="text-label-caps text-ink-muted mb-0">Do we deliver to you?</h2>
         <p className="text-ink-muted mt-xs mb-base text-sm">
-          Check before you spend a minute choosing. We will tell you straight if it is not
-          possible yet.
+          Check before you spend a minute choosing. We will tell you straight if it is not possible
+          yet.
         </p>
         <ServiceabilityChecker cities={cities} />
       </div>

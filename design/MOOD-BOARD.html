@@ -1,240 +1,927 @@
 <!doctype html>
-<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Upvvan — Mood Board</title>
-<style>
-  *,*::before,*::after{box-sizing:border-box}
-  :root{
-    --bg:#faf6ee; --panel:#fffdf8; --ink:#1d1a15; --mut:#6d6558; --line:#e2d9c8;
-    --forest:#224229; --green:#2f6b3c; --clay:#b4643c; --clay-soft:#e8d3c4;
-    --sage:#607359; --ochre:#c08a2e; --ink-soft:#3c372e;
-    --serif:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,ui-serif,serif;
-    --sans:"Avenir Next","Helvetica Neue",Inter,ui-sans-serif,system-ui,sans-serif;
-  }
-  body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);
-    font-size:15px;line-height:1.55;-webkit-font-smoothing:antialiased}
-  .wrap{max-width:1080px;margin:0 auto;padding:56px 32px 96px}
-  .eyebrow{font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:var(--clay);font-weight:600}
-  h1{font-family:var(--serif);font-size:clamp(38px,6vw,64px);line-height:1.02;
-     letter-spacing:-.02em;margin:14px 0 0;font-weight:400}
-  h2{font-family:var(--serif);font-size:30px;font-weight:400;letter-spacing:-.01em;margin:0 0 6px}
-  h3{font-size:13px;letter-spacing:.13em;text-transform:uppercase;font-weight:700;margin:0 0 14px}
-  .lede{font-size:18px;color:var(--ink-soft);max-width:62ch;margin:20px 0 0;line-height:1.6}
-  .rule{height:1px;background:var(--line);border:0;margin:0}
-  section{margin-top:64px}
-  .note{font-size:13px;color:var(--mut);max-width:70ch}
-  code{font-family:ui-monospace,Menlo,monospace;font-size:12px;background:#efe7d8;
-    padding:1px 5px;border-radius:3px;color:var(--ink-soft)}
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Upvvan — Mood Board</title>
+    <style>
+      *,
+      *::before,
+      *::after {
+        box-sizing: border-box;
+      }
+      :root {
+        --bg: #faf6ee;
+        --panel: #fffdf8;
+        --ink: #1d1a15;
+        --mut: #6d6558;
+        --line: #e2d9c8;
+        --forest: #224229;
+        --green: #2f6b3c;
+        --clay: #b4643c;
+        --clay-soft: #e8d3c4;
+        --sage: #607359;
+        --ochre: #c08a2e;
+        --ink-soft: #3c372e;
+        --serif: 'Iowan Old Style', 'Palatino Linotype', Palatino, Georgia, ui-serif, serif;
+        --sans: 'Avenir Next', 'Helvetica Neue', Inter, ui-sans-serif, system-ui, sans-serif;
+      }
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--ink);
+        font-family: var(--sans);
+        font-size: 15px;
+        line-height: 1.55;
+        -webkit-font-smoothing: antialiased;
+      }
+      .wrap {
+        max-width: 1080px;
+        margin: 0 auto;
+        padding: 56px 32px 96px;
+      }
+      .eyebrow {
+        font-size: 11px;
+        letter-spacing: 0.18em;
+        text-transform: uppercase;
+        color: var(--clay);
+        font-weight: 600;
+      }
+      h1 {
+        font-family: var(--serif);
+        font-size: clamp(38px, 6vw, 64px);
+        line-height: 1.02;
+        letter-spacing: -0.02em;
+        margin: 14px 0 0;
+        font-weight: 400;
+      }
+      h2 {
+        font-family: var(--serif);
+        font-size: 30px;
+        font-weight: 400;
+        letter-spacing: -0.01em;
+        margin: 0 0 6px;
+      }
+      h3 {
+        font-size: 13px;
+        letter-spacing: 0.13em;
+        text-transform: uppercase;
+        font-weight: 700;
+        margin: 0 0 14px;
+      }
+      .lede {
+        font-size: 18px;
+        color: var(--ink-soft);
+        max-width: 62ch;
+        margin: 20px 0 0;
+        line-height: 1.6;
+      }
+      .rule {
+        height: 1px;
+        background: var(--line);
+        border: 0;
+        margin: 0;
+      }
+      section {
+        margin-top: 64px;
+      }
+      .note {
+        font-size: 13px;
+        color: var(--mut);
+        max-width: 70ch;
+      }
+      code {
+        font-family: ui-monospace, Menlo, monospace;
+        font-size: 12px;
+        background: #efe7d8;
+        padding: 1px 5px;
+        border-radius: 3px;
+        color: var(--ink-soft);
+      }
 
-  /* palette */
-  .sw{display:grid;grid-template-columns:repeat(auto-fit,minmax(132px,1fr));gap:14px}
-  .sw div{border-radius:10px;overflow:hidden;border:1px solid var(--line);background:var(--panel)}
-  .sw .chip{height:96px}
-  .sw .meta{padding:10px 12px 12px}
-  .sw .nm{font-weight:700;font-size:13px}
-  .sw .hx{font-family:ui-monospace,Menlo,monospace;font-size:11px;color:var(--mut);margin-top:3px}
-  .sw .src{font-size:10.5px;color:var(--clay);margin-top:5px;letter-spacing:.04em}
+      /* palette */
+      .sw {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(132px, 1fr));
+        gap: 14px;
+      }
+      .sw div {
+        border-radius: 10px;
+        overflow: hidden;
+        border: 1px solid var(--line);
+        background: var(--panel);
+      }
+      .sw .chip {
+        height: 96px;
+      }
+      .sw .meta {
+        padding: 10px 12px 12px;
+      }
+      .sw .nm {
+        font-weight: 700;
+        font-size: 13px;
+      }
+      .sw .hx {
+        font-family: ui-monospace, Menlo, monospace;
+        font-size: 11px;
+        color: var(--mut);
+        margin-top: 3px;
+      }
+      .sw .src {
+        font-size: 10.5px;
+        color: var(--clay);
+        margin-top: 5px;
+        letter-spacing: 0.04em;
+      }
 
-  /* type specimen */
-  .spec{border:1px solid var(--line);border-radius:12px;overflow:hidden;background:var(--panel)}
-  .row{display:grid;grid-template-columns:150px 1fr;gap:24px;padding:22px 26px;
-       border-bottom:1px solid var(--line);align-items:baseline}
-  .row:last-child{border-bottom:0}
-  .lbl{font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--mut);font-weight:700}
-  .d{font-family:var(--serif);font-size:46px;line-height:1.05;letter-spacing:-.02em;margin:0}
-  .h2s{font-family:var(--serif);font-size:30px;line-height:1.15;margin:0}
-  .bd{font-size:16px;margin:0;max-width:60ch}
-  .caps{font-size:12px;letter-spacing:.16em;text-transform:uppercase;font-weight:700;color:var(--clay);margin:0}
+      /* type specimen */
+      .spec {
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        overflow: hidden;
+        background: var(--panel);
+      }
+      .row {
+        display: grid;
+        grid-template-columns: 150px 1fr;
+        gap: 24px;
+        padding: 22px 26px;
+        border-bottom: 1px solid var(--line);
+        align-items: baseline;
+      }
+      .row:last-child {
+        border-bottom: 0;
+      }
+      .lbl {
+        font-size: 10.5px;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        color: var(--mut);
+        font-weight: 700;
+      }
+      .d {
+        font-family: var(--serif);
+        font-size: 46px;
+        line-height: 1.05;
+        letter-spacing: -0.02em;
+        margin: 0;
+      }
+      .h2s {
+        font-family: var(--serif);
+        font-size: 30px;
+        line-height: 1.15;
+        margin: 0;
+      }
+      .bd {
+        font-size: 16px;
+        margin: 0;
+        max-width: 60ch;
+      }
+      .caps {
+        font-size: 12px;
+        letter-spacing: 0.16em;
+        text-transform: uppercase;
+        font-weight: 700;
+        color: var(--clay);
+        margin: 0;
+      }
 
-  /* mood tiles */
-  .tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(216px,1fr));gap:16px}
-  .tile{border-radius:12px;overflow:hidden;border:1px solid var(--line);background:var(--panel);
-        display:flex;flex-direction:column;min-height:250px}
-  .tile .art{height:150px;position:relative}
-  .tile .bd2{padding:14px 16px 18px}
-  .tile .t{font-family:var(--serif);font-size:19px;margin:0 0 5px}
-  .tile .d2{font-size:12.5px;color:var(--mut);margin:0}
-  .tile .tag{font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--clay);font-weight:700;margin-bottom:6px}
+      /* mood tiles */
+      .tiles {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(216px, 1fr));
+        gap: 16px;
+      }
+      .tile {
+        border-radius: 12px;
+        overflow: hidden;
+        border: 1px solid var(--line);
+        background: var(--panel);
+        display: flex;
+        flex-direction: column;
+        min-height: 250px;
+      }
+      .tile .art {
+        height: 150px;
+        position: relative;
+      }
+      .tile .bd2 {
+        padding: 14px 16px 18px;
+      }
+      .tile .t {
+        font-family: var(--serif);
+        font-size: 19px;
+        margin: 0 0 5px;
+      }
+      .tile .d2 {
+        font-size: 12.5px;
+        color: var(--mut);
+        margin: 0;
+      }
+      .tile .tag {
+        font-size: 10px;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        color: var(--clay);
+        font-weight: 700;
+        margin-bottom: 6px;
+      }
 
-  /* layout sketches */
-  .sk{border:1px solid var(--line);border-radius:12px;background:var(--panel);padding:16px}
-  .sk h4{font-family:var(--serif);font-size:17px;margin:0 0 3px;font-weight:400}
-  .sk .why{font-size:12px;color:var(--mut);margin:0 0 14px;min-height:34px}
-  .bars{display:flex;flex-direction:column;gap:4px}
-  .bar{height:15px;border-radius:3px;background:#e8e0d1;display:flex;align-items:center;
-       padding:0 8px;font-size:9.5px;color:var(--ink-soft);letter-spacing:.05em;font-weight:600}
-  .bar.f{background:var(--forest);color:#fff}
-  .bar.c{background:var(--clay);color:#fff}
-  .bar.s{background:#e6ddc9}
-  .bar.t{background:var(--ink)}
-  .bar.g{background:var(--green);color:#fff}
-  .split{display:grid;grid-template-columns:1.35fr 1fr;gap:4px}
-  .split .a{background:var(--forest);border-radius:3px;height:56px}
-  .split .b{background:var(--clay-soft);border-radius:3px;height:56px}
-  .grid4{display:grid;grid-template-columns:repeat(4,1fr);gap:4px}
-  .grid4 i{height:40px;background:#e6ddc9;border-radius:3px;display:block}
-  .grid4 i:nth-child(2n){background:var(--clay-soft)}
-  .grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:4px}
-  .grid3 i{height:44px;background:#e6ddc9;border-radius:3px;display:block}
-  .rail{display:flex;gap:4px;overflow:hidden}
-  .rail i{height:48px;background:#e6ddc9;border-radius:3px;flex:0 0 62px}
-  .rail i:first-child{background:var(--clay-soft)}
+      /* layout sketches */
+      .sk {
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        background: var(--panel);
+        padding: 16px;
+      }
+      .sk h4 {
+        font-family: var(--serif);
+        font-size: 17px;
+        margin: 0 0 3px;
+        font-weight: 400;
+      }
+      .sk .why {
+        font-size: 12px;
+        color: var(--mut);
+        margin: 0 0 14px;
+        min-height: 34px;
+      }
+      .bars {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+      }
+      .bar {
+        height: 15px;
+        border-radius: 3px;
+        background: #e8e0d1;
+        display: flex;
+        align-items: center;
+        padding: 0 8px;
+        font-size: 9.5px;
+        color: var(--ink-soft);
+        letter-spacing: 0.05em;
+        font-weight: 600;
+      }
+      .bar.f {
+        background: var(--forest);
+        color: #fff;
+      }
+      .bar.c {
+        background: var(--clay);
+        color: #fff;
+      }
+      .bar.s {
+        background: #e6ddc9;
+      }
+      .bar.t {
+        background: var(--ink);
+      }
+      .bar.g {
+        background: var(--green);
+        color: #fff;
+      }
+      .split {
+        display: grid;
+        grid-template-columns: 1.35fr 1fr;
+        gap: 4px;
+      }
+      .split .a {
+        background: var(--forest);
+        border-radius: 3px;
+        height: 56px;
+      }
+      .split .b {
+        background: var(--clay-soft);
+        border-radius: 3px;
+        height: 56px;
+      }
+      .grid4 {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 4px;
+      }
+      .grid4 i {
+        height: 40px;
+        background: #e6ddc9;
+        border-radius: 3px;
+        display: block;
+      }
+      .grid4 i:nth-child(2n) {
+        background: var(--clay-soft);
+      }
+      .grid3 {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 4px;
+      }
+      .grid3 i {
+        height: 44px;
+        background: #e6ddc9;
+        border-radius: 3px;
+        display: block;
+      }
+      .rail {
+        display: flex;
+        gap: 4px;
+        overflow: hidden;
+      }
+      .rail i {
+        height: 48px;
+        background: #e6ddc9;
+        border-radius: 3px;
+        flex: 0 0 62px;
+      }
+      .rail i:first-child {
+        background: var(--clay-soft);
+      }
 
-  table{width:100%;border-collapse:collapse;font-size:13px;margin-top:8px}
-  th,td{text-align:left;padding:9px 10px;border-bottom:1px solid var(--line);vertical-align:top}
-  th{font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--mut);font-weight:700}
-  td.n{font-family:var(--serif);font-size:16px;white-space:nowrap}
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 13px;
+        margin-top: 8px;
+      }
+      th,
+      td {
+        text-align: left;
+        padding: 9px 10px;
+        border-bottom: 1px solid var(--line);
+        vertical-align: top;
+      }
+      th {
+        font-size: 10.5px;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        color: var(--mut);
+        font-weight: 700;
+      }
+      td.n {
+        font-family: var(--serif);
+        font-size: 16px;
+        white-space: nowrap;
+      }
 
-  .gap{background:var(--forest);color:#f2ede1;border-radius:14px;padding:32px 34px;margin-top:14px}
-  .gap h3{color:#a8c9a4}
-  .gap ol{margin:0;padding-left:20px}
-  .gap li{margin-bottom:11px;font-size:14.5px;line-height:1.55}
-  .gap li:last-child{margin-bottom:0}
-  .gap b{color:#fff;font-weight:700}
+      .gap {
+        background: var(--forest);
+        color: #f2ede1;
+        border-radius: 14px;
+        padding: 32px 34px;
+        margin-top: 14px;
+      }
+      .gap h3 {
+        color: #a8c9a4;
+      }
+      .gap ol {
+        margin: 0;
+        padding-left: 20px;
+      }
+      .gap li {
+        margin-bottom: 11px;
+        font-size: 14.5px;
+        line-height: 1.55;
+      }
+      .gap li:last-child {
+        margin-bottom: 0;
+      }
+      .gap b {
+        color: #fff;
+        font-weight: 700;
+      }
 
-  .vs{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:14px}
-  .vs>div{border-radius:12px;padding:18px 20px;border:1px solid var(--line);background:var(--panel)}
-  .vs .no h4{font-family:var(--serif);margin:0 0 8px;font-size:17px;color:var(--mut);font-weight:400}
-  .vs .yes{border-color:var(--forest);background:var(--forest);color:#f2ede1}
-  .vs .yes h4{color:#a8c9a4}
-  .vs ul{margin:0;padding-left:17px;font-size:13.5px}
-  .vs li{margin-bottom:6px}
+      .vs {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 14px;
+        margin-top: 14px;
+      }
+      .vs > div {
+        border-radius: 12px;
+        padding: 18px 20px;
+        border: 1px solid var(--line);
+        background: var(--panel);
+      }
+      .vs .no h4 {
+        font-family: var(--serif);
+        margin: 0 0 8px;
+        font-size: 17px;
+        color: var(--mut);
+        font-weight: 400;
+      }
+      .vs .yes {
+        border-color: var(--forest);
+        background: var(--forest);
+        color: #f2ede1;
+      }
+      .vs .yes h4 {
+        color: #a8c9a4;
+      }
+      .vs ul {
+        margin: 0;
+        padding-left: 17px;
+        font-size: 13.5px;
+      }
+      .vs li {
+        margin-bottom: 6px;
+      }
 
-  footer{margin-top:80px;padding-top:24px;border-top:1px solid var(--line);
-    font-size:12px;color:var(--mut)}
-  .tagline{font-family:var(--serif);font-size:22px;font-style:italic;color:var(--ink-soft);margin-top:8px}
-  @media(max-width:760px){.row{grid-template-columns:1fr;gap:8px}.vs{grid-template-columns:1fr}.split{grid-template-columns:1fr}.wrap{padding:36px 20px 64px}}
-</style></head><body><div class="wrap">
+      footer {
+        margin-top: 80px;
+        padding-top: 24px;
+        border-top: 1px solid var(--line);
+        font-size: 12px;
+        color: var(--mut);
+      }
+      .tagline {
+        font-family: var(--serif);
+        font-size: 22px;
+        font-style: italic;
+        color: var(--ink-soft);
+        margin-top: 8px;
+      }
+      @media (max-width: 760px) {
+        .row {
+          grid-template-columns: 1fr;
+          gap: 8px;
+        }
+        .vs {
+          grid-template-columns: 1fr;
+        }
+        .split {
+          grid-template-columns: 1fr;
+        }
+        .wrap {
+          padding: 36px 20px 64px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <header>
+        <p class="eyebrow">Mood board · Upvvan · 4 October 2026</p>
+        <h1>Warm botanical<br />editorially calm.</h1>
+        <p class="lede">
+          Every competitor we audited — Ugaoo, Urvann, Paudhewale, TrustBasket, Bloomscape, The
+          Sill, Hey Rooted — reaches for the same cold, high-chroma, discount-coded green. Nobody in
+          the set combines a warm cream ground with a deep forest ink, and nobody puts their
+          delivery promise in the hero. This board takes the structure the winners use and the
+          palette nobody does.
+        </p>
+        <p class="tagline">"Grown 40 minutes away. Replaced if it dies in 90 days."</p>
+      </header>
 
-<header>
-  <p class="eyebrow">Mood board · Upvvan · 4 October 2026</p>
-  <h1>Warm botanical<br>editorially calm.</h1>
-  <p class="lede">Every competitor we audited — Ugaoo, Urvann, Paudhewale, TrustBasket, Bloomscape, The Sill, Hey Rooted — reaches for the same cold, high-chroma, discount-coded green. Nobody in the set combines a warm cream ground with a deep forest ink, and nobody puts their delivery promise in the hero. This board takes the structure the winners use and the palette nobody does.</p>
-  <p class="tagline">"Grown 40 minutes away. Replaced if it dies in 90 days."</p>
-</header>
+      <hr class="rule" style="margin-top: 44px" />
 
-<hr class="rule" style="margin-top:44px">
+      <section>
+        <h2>Palette</h2>
+        <p class="note">
+          Hex values sampled from live competitor CSS and inline styles, then pushed warm.
+          <b>Forest</b> and <b>cream</b> are lifted from Bloomscape (<code>#224229</code>,
+          <code>#fcf9f3</code>); <b>clay</b> is ours and appears nowhere in the competitor set — it
+          carries the planter story, which is our AOV mechanic, so it must not collide with the
+          green that means "yes".
+        </p>
+        <div class="sw" style="margin-top: 20px">
+          <div>
+            <div class="chip" style="background: #224229"></div>
+            <div class="meta">
+              <div class="nm">Forest</div>
+              <div class="hx">#224229</div>
+              <div class="src">BLOOMSCAPE · ink</div>
+            </div>
+          </div>
+          <div>
+            <div class="chip" style="background: #2f6b3c"></div>
+            <div class="meta">
+              <div class="nm">Green (truth)</div>
+              <div class="hx">#2f6b3c</div>
+              <div class="src">CURRENT · action</div>
+            </div>
+          </div>
+          <div>
+            <div class="chip" style="background: #607359"></div>
+            <div class="meta">
+              <div class="nm">Sage</div>
+              <div class="hx">#607359</div>
+              <div class="src">FOLIAGE FACTORY</div>
+            </div>
+          </div>
+          <div>
+            <div class="chip" style="background: #b4643c"></div>
+            <div class="meta">
+              <div class="nm">Clay</div>
+              <div class="hx">#b4643c</div>
+              <div class="src">OURS · planters</div>
+            </div>
+          </div>
+          <div>
+            <div class="chip" style="background: #c08a2e"></div>
+            <div class="meta">
+              <div class="nm">Ochre</div>
+              <div class="hx">#c08a2e</div>
+              <div class="src">SOIL · consumables</div>
+            </div>
+          </div>
+          <div>
+            <div class="chip" style="background: #faf6ee"></div>
+            <div class="meta">
+              <div class="nm">Cream</div>
+              <div class="hx">#faf6ee</div>
+              <div class="src">BLOOMSCAPE · warmed</div>
+            </div>
+          </div>
+          <div>
+            <div class="chip" style="background: #fffdf8"></div>
+            <div class="meta">
+              <div class="nm">Panel</div>
+              <div class="hx">#fffdf8</div>
+              <div class="src">OURS · cards</div>
+            </div>
+          </div>
+          <div>
+            <div class="chip" style="background: #1d1a15"></div>
+            <div class="meta">
+              <div class="nm">Ink</div>
+              <div class="hx">#1d1a15</div>
+              <div class="src">HEY ROOTED · warmed</div>
+            </div>
+          </div>
+        </div>
+        <table style="margin-top: 22px">
+          <tr>
+            <th>Competitor</th>
+            <th>Ground</th>
+            <th>Primary</th>
+            <th>Accent</th>
+            <th>Read</th>
+          </tr>
+          <tr>
+            <td class="n">Ugaoo</td>
+            <td><code>#ffffff</code></td>
+            <td><code>#0a4c36</code></td>
+            <td><code>#ffd02a</code> yellow</td>
+            <td>Cold green + sale yellow. Reads as a discount retailer.</td>
+          </tr>
+          <tr>
+            <td class="n">Bloomscape</td>
+            <td><code>#fcf9f3</code> cream</td>
+            <td><code>#224229</code></td>
+            <td>—</td>
+            <td>The only warm ground in the set. Closest to us.</td>
+          </tr>
+          <tr>
+            <td class="n">The Sill</td>
+            <td><code>#f7f7f7</code></td>
+            <td><code>#00ab84</code> teal</td>
+            <td><code>#f43643</code></td>
+            <td>Cool teal, loud red sale flags. Not premium.</td>
+          </tr>
+          <tr>
+            <td class="n">Hey Rooted</td>
+            <td><code>#ffffff</code></td>
+            <td><code>#134431</code></td>
+            <td><code>#de3618</code></td>
+            <td>Deep green, near-black ink. Good, but cold white.</td>
+          </tr>
+          <tr>
+            <td class="n">Foliage Factory</td>
+            <td><code>#e2e0da</code></td>
+            <td><code>#607359</code></td>
+            <td><code>#6c6b64</code></td>
+            <td>Muted sage + stone. The most tasteful, least known.</td>
+          </tr>
+          <tr>
+            <td class="n">TrustBasket</td>
+            <td><code>#ffffff</code></td>
+            <td><code>#228654</code></td>
+            <td><code>#f6740a</code></td>
+            <td>Green + safety orange. Reads as a hardware store.</td>
+          </tr>
+        </table>
+      </section>
 
-<section>
-  <h2>Palette</h2>
-  <p class="note">Hex values sampled from live competitor CSS and inline styles, then pushed warm. <b>Forest</b> and <b>cream</b> are lifted from Bloomscape (<code>#224229</code>, <code>#fcf9f3</code>); <b>clay</b> is ours and appears nowhere in the competitor set — it carries the planter story, which is our AOV mechanic, so it must not collide with the green that means "yes".</p>
-  <div class="sw" style="margin-top:20px">
-    <div><div class="chip" style="background:#224229"></div><div class="meta"><div class="nm">Forest</div><div class="hx">#224229</div><div class="src">BLOOMSCAPE · ink</div></div></div>
-    <div><div class="chip" style="background:#2f6b3c"></div><div class="meta"><div class="nm">Green (truth)</div><div class="hx">#2f6b3c</div><div class="src">CURRENT · action</div></div></div>
-    <div><div class="chip" style="background:#607359"></div><div class="meta"><div class="nm">Sage</div><div class="hx">#607359</div><div class="src">FOLIAGE FACTORY</div></div></div>
-    <div><div class="chip" style="background:#b4643c"></div><div class="meta"><div class="nm">Clay</div><div class="hx">#b4643c</div><div class="src">OURS · planters</div></div></div>
-    <div><div class="chip" style="background:#c08a2e"></div><div class="meta"><div class="nm">Ochre</div><div class="hx">#c08a2e</div><div class="src">SOIL · consumables</div></div></div>
-    <div><div class="chip" style="background:#faf6ee"></div><div class="meta"><div class="nm">Cream</div><div class="hx">#faf6ee</div><div class="src">BLOOMSCAPE · warmed</div></div></div>
-    <div><div class="chip" style="background:#fffdf8"></div><div class="meta"><div class="nm">Panel</div><div class="hx">#fffdf8</div><div class="src">OURS · cards</div></div></div>
-    <div><div class="chip" style="background:#1d1a15"></div><div class="meta"><div class="nm">Ink</div><div class="hx">#1d1a15</div><div class="src">HEY ROOTED · warmed</div></div></div>
-  </div>
-  <table style="margin-top:22px">
-    <tr><th>Competitor</th><th>Ground</th><th>Primary</th><th>Accent</th><th>Read</th></tr>
-    <tr><td class="n">Ugaoo</td><td><code>#ffffff</code></td><td><code>#0a4c36</code></td><td><code>#ffd02a</code> yellow</td><td>Cold green + sale yellow. Reads as a discount retailer.</td></tr>
-    <tr><td class="n">Bloomscape</td><td><code>#fcf9f3</code> cream</td><td><code>#224229</code></td><td>—</td><td>The only warm ground in the set. Closest to us.</td></tr>
-    <tr><td class="n">The Sill</td><td><code>#f7f7f7</code></td><td><code>#00ab84</code> teal</td><td><code>#f43643</code></td><td>Cool teal, loud red sale flags. Not premium.</td></tr>
-    <tr><td class="n">Hey Rooted</td><td><code>#ffffff</code></td><td><code>#134431</code></td><td><code>#de3618</code></td><td>Deep green, near-black ink. Good, but cold white.</td></tr>
-    <tr><td class="n">Foliage Factory</td><td><code>#e2e0da</code></td><td><code>#607359</code></td><td><code>#6c6b64</code></td><td>Muted sage + stone. The most tasteful, least known.</td></tr>
-    <tr><td class="n">TrustBasket</td><td><code>#ffffff</code></td><td><code>#228654</code></td><td><code>#f6740a</code></td><td>Green + safety orange. Reads as a hardware store.</td></tr>
-  </table>
-</section>
+      <hr class="rule" style="margin-top: 64px" />
 
-<hr class="rule" style="margin-top:64px">
+      <section>
+        <h2>Typography</h2>
+        <p class="note">
+          Competitors split into two camps: geometric/grotesque sans (Ugaoo on Outfit, TrustBasket
+          on Karla, Foliage Factory on Poppins) and neutral system sans (Bloomscape, The Sill).
+          Almost nobody sets a serif display. Our current <code>ui-serif</code> h1 is the right
+          instinct and stays — but it needs to be allowed to be <i>large</i>.
+        </p>
+        <div class="spec" style="margin-top: 20px">
+          <div class="row">
+            <div class="lbl">Display / h1</div>
+            <div>
+              <p class="d">Grown forty minutes away.</p>
+              <p class="note" style="margin: 8px 0 0">
+                Iowan Old Style → Palatino → Georgia. 46–64px, weight 400, tracking −0.02em.
+                <b>Not bold.</b> A 600-weight serif at this size reads like a newspaper, not a
+                nursery.
+              </p>
+            </div>
+          </div>
+          <div class="row">
+            <div class="lbl">Section / h2</div>
+            <div>
+              <p class="h2s">In season in Bengaluru</p>
+              <p class="note" style="margin: 8px 0 0">Same family, 30px. Never bold.</p>
+            </div>
+          </div>
+          <div class="row">
+            <div class="lbl">Body</div>
+            <div>
+              <p class="bd">
+                Free delivery inside the city, no minimum order. Prepaid only — a returned plant
+                cannot be sold again, so we do not create the return leg.
+              </p>
+              <p class="note" style="margin: 8px 0 0">
+                Avenir Next → Inter → system. 16px / 1.6, measure capped at 65ch.
+              </p>
+            </div>
+          </div>
+          <div class="row">
+            <div class="lbl">Eyebrow</div>
+            <div>
+              <p class="caps">Own nursery · Own riders · Bengaluru</p>
+              <p class="note" style="margin: 8px 0 0">
+                11–12px, 0.16em tracking, uppercase, <b>clay</b>. Structural, not decorative.
+                Carries the three-part proof.
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
 
-<section>
-  <h2>Typography</h2>
-  <p class="note">Competitors split into two camps: geometric/grotesque sans (Ugaoo on Outfit, TrustBasket on Karla, Foliage Factory on Poppins) and neutral system sans (Bloomscape, The Sill). Almost nobody sets a serif display. Our current <code>ui-serif</code> h1 is the right instinct and stays — but it needs to be allowed to be <i>large</i>.</p>
-  <div class="spec" style="margin-top:20px">
-    <div class="row"><div class="lbl">Display / h1</div><div><p class="d">Grown forty minutes away.</p><p class="note" style="margin:8px 0 0">Iowan Old Style → Palatino → Georgia. 46–64px, weight 400, tracking −0.02em. <b>Not bold.</b> A 600-weight serif at this size reads like a newspaper, not a nursery.</p></div></div>
-    <div class="row"><div class="lbl">Section / h2</div><div><p class="h2s">In season in Bengaluru</p><p class="note" style="margin:8px 0 0">Same family, 30px. Never bold.</p></div></div>
-    <div class="row"><div class="lbl">Body</div><div><p class="bd">Free delivery inside the city, no minimum order. Prepaid only — a returned plant cannot be sold again, so we do not create the return leg.</p><p class="note" style="margin:8px 0 0">Avenir Next → Inter → system. 16px / 1.6, measure capped at 65ch.</p></div></div>
-    <div class="row"><div class="lbl">Eyebrow</div><div><p class="caps">Own nursery · Own riders · Bengaluru</p><p class="note" style="margin:8px 0 0">11–12px, 0.16em tracking, uppercase, <b>clay</b>. Structural, not decorative. Carries the three-part proof.</p></div></div>
-  </div>
-</section>
+      <hr class="rule" style="margin-top: 64px" />
 
-<hr class="rule" style="margin-top:64px">
+      <section>
+        <h2>Visual direction</h2>
+        <p class="note">
+          Four tiles. Each is a rule for how a photograph is shot and cropped, because for a plant
+          brand the photography <i>is</i> the design — there is no styling to hide behind it.
+        </p>
+        <div class="tiles" style="margin-top: 20px">
+          <div class="tile">
+            <div class="art" style="background: linear-gradient(160deg, #224229, #3d6b3f)"></div>
+            <div class="bd2">
+              <div class="tag">01 · Hero</div>
+              <p class="t">One plant, one light source</p>
+              <p class="d2">
+                A single specimen against warm cream, raking daylight from one side, deep shadow.
+                Never a flat-lay grid, never a lifestyle shot with a smiling family. We sell a
+                plant, not a room.
+              </p>
+            </div>
+          </div>
+          <div class="tile">
+            <div class="art" style="background: linear-gradient(200deg, #b4643c, #e8d3c4)"></div>
+            <div class="bd2">
+              <div class="tag">02 · Colour</div>
+              <p class="t">Terracotta is the accent</p>
+              <p class="d2">
+                Clay appears on planters, pots, benches and the eyebrow only. Green stays reserved
+                for truth — a serviceable answer, a confirmed state. The two never trade jobs.
+              </p>
+            </div>
+          </div>
+          <div class="tile">
+            <div class="art" style="background: linear-gradient(140deg, #1d1a15, #4a4335)"></div>
+            <div class="bd2">
+              <div class="tag">03 · Ground</div>
+              <p class="t">Cream, not white</p>
+              <p class="d2">
+                Every surface is warm (<code>#faf6ee</code> / <code>#fffdf8</code>). Pure white next
+                to foliage reads clinical and blows out the greens in photography.
+              </p>
+            </div>
+          </div>
+          <div class="tile">
+            <div class="art" style="background: linear-gradient(120deg, #e8e0d1, #c9bfa8)"></div>
+            <div class="bd2">
+              <div class="tag">04 · Proof</div>
+              <p class="t">Show the bench, not the studio</p>
+              <p class="d2">
+                Packing bench, nursery rows, a rider's open EV basket. The provenance shot
+                <i>is</i> the differentiator: "40 minutes away" is a claim a national brand cannot
+                make.
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
 
-<section>
-  <h2>Visual direction</h2>
-  <p class="note">Four tiles. Each is a rule for how a photograph is shot and cropped, because for a plant brand the photography <i>is</i> the design — there is no styling to hide behind it.</p>
-  <div class="tiles" style="margin-top:20px">
-    <div class="tile"><div class="art" style="background:linear-gradient(160deg,#224229,#3d6b3f)"></div>
-      <div class="bd2"><div class="tag">01 · Hero</div><p class="t">One plant, one light source</p><p class="d2">A single specimen against warm cream, raking daylight from one side, deep shadow. Never a flat-lay grid, never a lifestyle shot with a smiling family. We sell a plant, not a room.</p></div></div>
-    <div class="tile"><div class="art" style="background:linear-gradient(200deg,#b4643c,#e8d3c4)"></div>
-      <div class="bd2"><div class="tag">02 · Colour</div><p class="t">Terracotta is the accent</p><p class="d2">Clay appears on planters, pots, benches and the eyebrow only. Green stays reserved for truth — a serviceable answer, a confirmed state. The two never trade jobs.</p></div></div>
-    <div class="tile"><div class="art" style="background:linear-gradient(140deg,#1d1a15,#4a4335)"></div>
-      <div class="bd2"><div class="tag">03 · Ground</div><p class="t">Cream, not white</p><p class="d2">Every surface is warm (<code>#faf6ee</code> / <code>#fffdf8</code>). Pure white next to foliage reads clinical and blows out the greens in photography.</p></div></div>
-    <div class="tile"><div class="art" style="background:linear-gradient(120deg,#e8e0d1,#c9bfa8)"></div>
-      <div class="bd2"><div class="tag">04 · Proof</div><p class="t">Show the bench, not the studio</p><p class="d2">Packing bench, nursery rows, a rider's open EV basket. The provenance shot <i>is</i> the differentiator: "40 minutes away" is a claim a national brand cannot make.</p></div></div>
-  </div>
-</section>
+      <hr class="rule" style="margin-top: 64px" />
 
-<hr class="rule" style="margin-top:64px">
+      <section>
+        <h2>Layout language</h2>
+        <p class="note">
+          Five structural blocks, each attributed to the competitor that proved it. These are the
+          components the redesigned homepage is assembled from.
+        </p>
+        <div
+          class="tiles"
+          style="margin-top: 20px; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr))"
+        >
+          <div class="sk">
+            <h4>Split hero</h4>
+            <p class="why">
+              Type left, single specimen right. <i>The Sill</i> + <i>Hey Rooted</i> both run a
+              split/slideshow hero; Hey Rooted's scales 60px→43px and holds a fixed 550px height.
+            </p>
+            <div class="split">
+              <div class="a"></div>
+              <div class="b"></div>
+            </div>
+            <div class="bars" style="margin-top: 8px">
+              <div class="bar g">Eyebrow</div>
+              <div class="bar t">Display headline</div>
+              <div class="bar s">Sub-headline, 2 lines</div>
+              <div class="bar c">Primary CTA</div>
+              <div class="bar s">Coverage check inline</div>
+            </div>
+          </div>
 
-<section>
-  <h2>Layout language</h2>
-  <p class="note">Five structural blocks, each attributed to the competitor that proved it. These are the components the redesigned homepage is assembled from.</p>
-  <div class="tiles" style="margin-top:20px;grid-template-columns:repeat(auto-fit,minmax(250px,1fr))">
-    <div class="sk"><h4>Split hero</h4><p class="why">Type left, single specimen right. <i>The Sill</i> + <i>Hey Rooted</i> both run a split/slideshow hero; Hey Rooted's scales 60px→43px and holds a fixed 550px height.</p>
-      <div class="split"><div class="a"></div><div class="b"></div></div>
-      <div class="bars" style="margin-top:8px"><div class="bar g">Eyebrow</div><div class="bar t">Display headline</div><div class="bar s">Sub-headline, 2 lines</div><div class="bar c">Primary CTA</div><div class="bar s">Coverage check inline</div></div></div>
+          <div class="sk">
+            <h4>Room &amp; light facets</h4>
+            <p class="why">
+              Bloomscape's four facet tiles — Low Light, Pet-Friendly, Statement, Easy Care — plus
+              Ugaoo's Living Room / Bedroom / Balcony / Office. For India the light question must be
+              <i>AC reality</i>, not lux.
+            </p>
+            <div class="grid4"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+            <div class="bars" style="margin-top: 8px">
+              <div class="bar c">Low light (AC flat)</div>
+              <div class="bar s">Pet safe</div>
+              <div class="bar s">Impossible to kill</div>
+              <div class="bar s">Balcony</div>
+            </div>
+          </div>
 
-    <div class="sk"><h4>Room &amp; light facets</h4><p class="why">Bloomscape's four facet tiles — Low Light, Pet-Friendly, Statement, Easy Care — plus Ugaoo's Living Room / Bedroom / Balcony / Office. For India the light question must be <i>AC reality</i>, not lux.</p>
-      <div class="grid4"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
-      <div class="bars" style="margin-top:8px"><div class="bar c">Low light (AC flat)</div><div class="bar s">Pet safe</div><div class="bar s">Impossible to kill</div><div class="bar s">Balcony</div></div></div>
+          <div class="sk">
+            <h4>Trust rail</h4>
+            <p class="why">
+              Ugaoo:
+              <i>Grown at our farm / 3-step quality check / Survival packaging / Arrives alive</i>.
+              TrustBasket: <i>QUALITY ASSURED · EASY RETURNS</i>. Ours adds the two numbers nobody
+              prints.
+            </p>
+            <div class="bars">
+              <div class="bar f">90-day survival guarantee</div>
+              <div class="bar f">Reply on WhatsApp in 15 min</div>
+              <div class="bar f">Free delivery, no minimum</div>
+              <div class="bar f">Prepaid only — we explain why</div>
+            </div>
+          </div>
 
-    <div class="sk"><h4>Trust rail</h4><p class="why">Ugaoo: <i>Grown at our farm / 3-step quality check / Survival packaging / Arrives alive</i>. TrustBasket: <i>QUALITY ASSURED · EASY RETURNS</i>. Ours adds the two numbers nobody prints.</p>
-      <div class="bars"><div class="bar f">90-day survival guarantee</div><div class="bar f">Reply on WhatsApp in 15 min</div><div class="bar f">Free delivery, no minimum</div><div class="bar f">Prepaid only — we explain why</div></div></div>
+          <div class="sk">
+            <h4>Product rail</h4>
+            <p class="why">
+              Hey Rooted's split hero runs into a card rail; Ugaoo and TrustBasket both use a
+              horizontal carousel. Price ladder and care line stay on the card, never a
+              struck-through MRP.
+            </p>
+            <div class="rail"><i></i><i></i><i></i><i></i><i></i><i></i></div>
+            <div class="bars" style="margin-top: 8px">
+              <div class="bar s">Size tier · light · pet-safe</div>
+              <div class="bar t">Common name</div>
+              <div class="bar s">Water every N days</div>
+              <div class="bar g">from ₹299</div>
+            </div>
+          </div>
 
-    <div class="sk"><h4>Product rail</h4><p class="why">Hey Rooted's split hero runs into a card rail; Ugaoo and TrustBasket both use a horizontal carousel. Price ladder and care line stay on the card, never a struck-through MRP.</p>
-      <div class="rail"><i></i><i></i><i></i><i></i><i></i><i></i></div>
-      <div class="bars" style="margin-top:8px"><div class="bar s">Size tier · light · pet-safe</div><div class="bar t">Common name</div><div class="bar s">Water every N days</div><div class="bar g">from ₹299</div></div></div>
+          <div class="sk">
+            <h4>Provenance band</h4>
+            <p class="why">
+              No competitor does this. Ugaoo has a "Our Story" block but leads with 25 acres in
+              Talegaon — scale, not nearness. Nearness is the whole thesis and it costs us nothing
+              to say.
+            </p>
+            <div class="bars">
+              <div class="bar f" style="background: #224229">2 acres · Whitefield, Bengaluru</div>
+              <div class="bar s">Picked this morning</div>
+              <div class="bar s">Open EV basket, no box</div>
+              <div class="bar s">Reached you by 7 pm</div>
+            </div>
+          </div>
 
-    <div class="sk"><h4>Provenance band</h4><p class="why">No competitor does this. Ugaoo has a "Our Story" block but leads with 25 acres in Talegaon — scale, not nearness. Nearness is the whole thesis and it costs us nothing to say.</p>
-      <div class="bars"><div class="bar f" style="background:#224229">2 acres · Whitefield, Bengaluru</div><div class="bar s">Picked this morning</div><div class="bar s">Open EV basket, no box</div><div class="bar s">Reached you by 7 pm</div></div></div>
+          <div class="sk">
+            <h4>Honest coverage gate</h4>
+            <p class="why">
+              Kept exactly as-is and moved <i>up</i>, not down. It is the differentiator:
+              over-promising geography is the single most-complained-about failure in this category.
+              A refusal must be the easiest thing on the page to read.
+            </p>
+            <div class="bars">
+              <div class="bar t">Do we deliver to you?</div>
+              <div class="bar g">560001 → Yes, Whitefield, 2 hrs</div>
+              <div class="bar" style="background: #efe7d8">600001 → Not in Bengaluru yet</div>
+              <div class="bar c">Try another pincode</div>
+            </div>
+          </div>
+        </div>
+      </section>
 
-    <div class="sk"><h4>Honest coverage gate</h4><p class="why">Kept exactly as-is and moved <i>up</i>, not down. It is the differentiator: over-promising geography is the single most-complained-about failure in this category. A refusal must be the easiest thing on the page to read.</p>
-      <div class="bars"><div class="bar t">Do we deliver to you?</div><div class="bar g">560001 → Yes, Whitefield, 2 hrs</div><div class="bar" style="background:#efe7d8">600001 → Not in Bengaluru yet</div><div class="bar c">Try another pincode</div></div></div>
-  </div>
-</section>
+      <hr class="rule" style="margin-top: 64px" />
 
-<hr class="rule" style="margin-top:64px">
+      <section>
+        <h2>The white space</h2>
+        <div class="gap">
+          <h3>What no competitor in the set does</h3>
+          <ol>
+            <li>
+              <b>Prints a number in the hero.</b> Bloomscape's hero is "What kind of plant parent
+              are you?"; The Sill's is a seasonal collection. Ours is <b>90 days</b> and
+              <b>15 minutes</b>, above the fold, in the headline itself.
+            </li>
+            <li>
+              <b>Shows the delivery promise before the product.</b> Every competitor leads with a
+              carousel. Ours leads with <i>do we deliver to you</i> — because for an Indian
+              first-time buyer in a rented flat that is the real question, and it is where we beat
+              Urvann's ₹99 floor.
+            </li>
+            <li>
+              <b>Explains why there is no COD.</b> Ugaoo, Paudhewale and TrustBasket all offer COD
+              and none of them say what it costs them. Ours says it in one line — it is a
+              <i>feature</i> and the research says it is the reason the category's returns are
+              fatal.
+            </li>
+            <li>
+              <b>Leads on provenance, not scale.</b> Ugaoo = 25 acres in Talegaon. Urvann = 8 farms,
+              500 riders, 2 cities. Ours = 2 acres, 40 minutes, one city. Distance beats size and no
+              national brand can copy it.
+            </li>
+            <li>
+              <b>Uses a warm palette.</b> Seven sites audited, all cold white or high-chroma green.
+              Bloomscape is the only warm ground and it is the one people call premium.
+            </li>
+            <li>
+              <b>Says "not yet" as a feature.</b> Paudhewale's <code>&lt;5% RTO</code> is the only
+              competitor publishing a reliability number. Nobody publishes a <i>refusal</i> as
+              prominently as a promise.
+            </li>
+          </ol>
+        </div>
 
-<section>
-  <h2>The white space</h2>
-  <div class="gap">
-    <h3>What no competitor in the set does</h3>
-    <ol>
-      <li><b>Prints a number in the hero.</b> Bloomscape's hero is "What kind of plant parent are you?"; The Sill's is a seasonal collection. Ours is <b>90 days</b> and <b>15 minutes</b>, above the fold, in the headline itself.</li>
-      <li><b>Shows the delivery promise before the product.</b> Every competitor leads with a carousel. Ours leads with <i>do we deliver to you</i> — because for an Indian first-time buyer in a rented flat that is the real question, and it is where we beat Urvann's ₹99 floor.</li>
-      <li><b>Explains why there is no COD.</b> Ugaoo, Paudhewale and TrustBasket all offer COD and none of them say what it costs them. Ours says it in one line — it is a <i>feature</i> and the research says it is the reason the category's returns are fatal.</li>
-      <li><b>Leads on provenance, not scale.</b> Ugaoo = 25 acres in Talegaon. Urvann = 8 farms, 500 riders, 2 cities. Ours = 2 acres, 40 minutes, one city. Distance beats size and no national brand can copy it.</li>
-      <li><b>Uses a warm palette.</b> Seven sites audited, all cold white or high-chroma green. Bloomscape is the only warm ground and it is the one people call premium.</li>
-      <li><b>Says "not yet" as a feature.</b> Paudhewale's <code>&lt;5% RTO</code> is the only competitor publishing a reliability number. Nobody publishes a <i>refusal</i> as prominently as a promise.</li>
-    </ol>
-  </div>
+        <div class="vs">
+          <div class="no">
+            <h4>✗ What we drop</h4>
+            <ul>
+              <li>
+                Struck-through MRP / sale badge — every Indian site shows one; it's a merchandising
+                fiction we refuse.
+              </li>
+              <li>
+                Sale-yellow and safety-orange accents (Ugaoo, TrustBasket) — discount-coded, wrong
+                register.
+              </li>
+              <li>
+                A 150-item mega-nav. Our catalogue is seasonal and small; a big nav would lie about
+                depth.
+              </li>
+              <li>Pure white. Cold ground kills the photography.</li>
+              <li>
+                Sticky WhatsApp bubble over the fold — we put the number in the trust rail where it
+                can't cover a product.
+              </li>
+            </ul>
+          </div>
+          <div class="yes">
+            <h4>✓ What we keep from the winners</h4>
+            <ul>
+              <li>Split hero, single specimen, generous type — The Sill, Hey Rooted.</li>
+              <li>Four room/light facet tiles — Bloomscape, Ugaoo.</li>
+              <li>A four-item trust rail with icons — Ugaoo, TrustBasket.</li>
+              <li>Horizontal product rail into a grid — Hey Rooted, Ugaoo, TrustBasket.</li>
+              <li>
+                Care facts on the card: water interval, soil-moisture %, pet-safety, difficulty —
+                the schema every leader has and most Indian sites hide.
+              </li>
+              <li>
+                The planter as a visible, priced variant — The Sill's mechanic, and ours is worth
+                +29% to +121%.
+              </li>
+            </ul>
+          </div>
+        </div>
+      </section>
 
-  <div class="vs">
-    <div class="no"><h4>✗ What we drop</h4><ul>
-      <li>Struck-through MRP / sale badge — every Indian site shows one; it's a merchandising fiction we refuse.</li>
-      <li>Sale-yellow and safety-orange accents (Ugaoo, TrustBasket) — discount-coded, wrong register.</li>
-      <li>A 150-item mega-nav. Our catalogue is seasonal and small; a big nav would lie about depth.</li>
-      <li>Pure white. Cold ground kills the photography.</li>
-      <li>Sticky WhatsApp bubble over the fold — we put the number in the trust rail where it can't cover a product.</li>
-    </ul></div>
-    <div class="yes"><h4>✓ What we keep from the winners</h4><ul>
-      <li>Split hero, single specimen, generous type — The Sill, Hey Rooted.</li>
-      <li>Four room/light facet tiles — Bloomscape, Ugaoo.</li>
-      <li>A four-item trust rail with icons — Ugaoo, TrustBasket.</li>
-      <li>Horizontal product rail into a grid — Hey Rooted, Ugaoo, TrustBasket.</li>
-      <li>Care facts on the card: water interval, soil-moisture %, pet-safety, difficulty — the schema every leader has and most Indian sites hide.</li>
-      <li>The planter as a visible, priced variant — The Sill's mechanic, and ours is worth +29% to +121%.</li>
-    </ul></div>
-  </div>
-</section>
-
-<footer>
-  <p><b>Evidence.</b> Palettes, section order, nav and hero copy sampled from live HTML fetched 4 Oct 2026: ugaoo.com, urvann.com, paudhewale.com, trustbasket.com, bloomscape.com, thesill.com, heyrooted.com, foliage-factory.com, mcaffeine.com. Urvann, Paudhewale and Plantora are JS-rendered and returned only a shell — <b>their page structure is UNVERIFIED</b> and nothing in this board is attributed to them.</p>
-  <p style="margin-top:10px">Tokens here supersede nothing in <code>DESIGN.md</code> — the green-means-yes rule and the OKLCH pipeline still hold. This board proposes the surrounding warmth and the added clay/ochre accents.</p>
-</footer>
-
-</div></body></html>
+      <footer>
+        <p>
+          <b>Evidence.</b> Palettes, section order, nav and hero copy sampled from live HTML fetched
+          4 Oct 2026: ugaoo.com, urvann.com, paudhewale.com, trustbasket.com, bloomscape.com,
+          thesill.com, heyrooted.com, foliage-factory.com, mcaffeine.com. Urvann, Paudhewale and
+          Plantora are JS-rendered and returned only a shell —
+          <b>their page structure is UNVERIFIED</b> and nothing in this board is attributed to them.
+        </p>
+        <p style="margin-top: 10px">
+          Tokens here supersede nothing in <code>DESIGN.md</code> — the green-means-yes rule and the
+          OKLCH pipeline still hold. This board proposes the surrounding warmth and the added
+          clay/ochre accents.
+        </p>
+      </footer>
+    </div>
+  </body>
+</html>

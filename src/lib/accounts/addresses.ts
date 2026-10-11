@@ -2,20 +2,27 @@ import 'server-only'
 
 import { config } from '@/lib/config'
 import { getCustomerId } from '@/lib/auth/session'
+import { getPool as sharedPool } from '@/lib/db/pool'
 
 /**
- * Customer account data — order history and the address book.
+ * Customer address book.
+ *
+ * Order history used to live here too and does not any more — it is
+ * `src/lib/accounts/orders.ts`. Split by subject rather than by accident: this
+ * file is about where a parcel goes, and "listCustomerOrders" hiding inside
+ * `addresses` invited the next reader to assume the two share an ownership
+ * predicate. They do not; each carries its own.
  *
  * ── WHY THIS FILE HAS NO `customer_id` PARAMETER ────────────────────────────
  *
  * Every function here takes the customer from the SESSION and nowhere else.
  *
  * This is the single most important line in the file. The obvious shape is
- * `listOrders(customerId)` called by a page that read the id from the URL — and
- * that shape makes "show me another customer's orders" a one-line mistake that
- * typechecks, passes every test, and leaks one customer's address and order
- * history to another. There is no version of this API where a caller can supply
- * an id, so the mistake cannot be written.
+ * `listAddresses(customerId)` called by a page that read the id from the URL — and
+ * that shape makes "show me another customer's addresses" a one-line mistake that
+ * typechecks, passes every test, and hands one customer's home address to
+ * another. There is no version of this API where a caller can supply an id, so
+ * the mistake cannot be written.
  *
  * ── WHY RAW SQL AND NOT THE PAYLOAD LOCAL API ───────────────────────────────
  *
@@ -32,119 +39,33 @@ import { getCustomerId } from '@/lib/auth/session'
  * real FK rather than a convention.
  */
 
-let pool: import('pg').Pool | null = null
-
 /**
  * A lazily-created module-local pool, matching `geo/loader.server.ts` and
  * `catalogue/loader.server.ts`. Next's dev server would otherwise open a fresh
  * connection per request.
  */
+
+/*
+ * Delegates to the ONE process-wide pool.
+ *
+ * There were nine module-level pools in this codebase — this one was `max: 20`,
+ * and `catalogue/loader.server.ts` was another `max: 20`, which is 40 connections
+ * from two modules before anything else loads. `next build` prerenders dozens of
+ * routes in parallel and died with
+ *
+ *     error: sorry, too many clients already
+ *     Error occurred prerendering page "/collections/plants-for-a-bright-room"
+ *
+ * A pool exists to REUSE connections. Nine pools reusing the same handful is not
+ * reuse; it is nine warm-up costs and nine places for a leak to hide. See
+ * `src/lib/db/pool.ts`.
+ *
+ * Kept as a thin wrapper rather than replaced at every call site: the callers are
+ * correct, and rewriting working call sites during an incident is how an incident
+ * becomes an outage.
+ */
 async function getPool(): Promise<import('pg').Pool> {
-  if (!pool) {
-    const { Pool } = await import('pg')
-    pool = new Pool({ connectionString: config.database.url })
-  }
-  return pool
-}
-
-/* ── ORDERS ────────────────────────────────────────────────────────────────── */
-
-/**
- * `numeric` comes back from `pg` as a STRING, not a number — the driver is
- * being faithful to the column type. `formatPaise` then runs `Number.isInteger`
- * on a string and returns false, so the price renders blank.
- *
- * Coerced here, at the loader boundary, with a refusal rather than a silent
- * pass: this is where a float would otherwise enter a paise column.
- */
-function paise(value: string | number, label: string): number {
-  const n = typeof value === 'number' ? value : Number(value)
-  if (!Number.isInteger(n)) {
-    throw new Error(`${label} is not integer paise (received ${String(value)}).`)
-  }
-  return n
-}
-
-export interface AccountOrder {
-  orderCode: string
-  status: string
-  pincode: string
-  revenuePaise: number
-  createdAt: Date
-  items: { name: string; sizeTier: string | null; pricePaise: number }[]
-}
-
-interface OrderRow {
-  order_code: string
-  status: string
-  pincode: string
-  revenue_paise: string
-  created_at: Date
-}
-
-/**
- * This customer's orders, newest first.
- *
- * Returns an empty array when signed out rather than throwing — callers pass the
- * result straight to `.map`, and a signed-out visitor reaching this through a
- * cached render should see an empty list, not an error page.
- */
-export async function listCustomerOrders(): Promise<AccountOrder[]> {
-  const customerId = await getCustomerId()
-  if (!customerId) return []
-
-  const db = await getPool()
-
-  const { rows } = await db.query<OrderRow>(
-    `SELECT "order_code", "status", "pincode", "revenue_paise", "created_at"
-       FROM "orders"
-      WHERE "customer_id" = $1
-      ORDER BY "created_at" DESC`,
-    [customerId],
-  )
-
-  if (rows.length === 0) return []
-
-  /*
-   * Items are fetched for all orders in ONE query rather than per order. This
-   * function runs on every account page view; N+1 would mean a customer with
-   * nine orders waits on ten round-trips.
-   */
-  const { rows: items } = await db.query<{
-    order_code: string
-    common_name: string | null
-    size_tier: string | null
-    price_paise: string
-  }>(
-    `SELECT o."order_code", sp."common_name", s."size_tier", oi."price_paise"
-       FROM "orders" o
-       JOIN "orders_items" oi ON oi."_parent_id" = o."id"
-       LEFT JOIN "skus" s ON s."id" = oi."sku_id"
-       LEFT JOIN "species" sp ON sp."id" = s."species_id"
-      WHERE o."customer_id" = $1
-      ORDER BY oi."_order"`,
-    [customerId],
-  )
-
-  const itemsByOrder = new Map<string, AccountOrder['items']>()
-  for (const item of items) {
-    const list = itemsByOrder.get(item.order_code) ?? []
-    list.push({
-      name: item.common_name ?? 'Plant',
-      sizeTier: item.size_tier,
-      pricePaise: paise(item.price_paise, 'order item price'),
-    })
-    itemsByOrder.set(item.order_code, list)
-  }
-
-  return rows.map((o) => ({
-    orderCode: o.order_code,
-    status: o.status,
-    pincode: o.pincode,
-    revenuePaise: paise(o.revenue_paise, 'order revenue'),
-    createdAt: o.created_at,
-    items: itemsByOrder.get(o.order_code) ?? [],
-  }))
+  return sharedPool()
 }
 
 /* ── ADDRESS BOOK ──────────────────────────────────────────────────────────── */

@@ -153,7 +153,7 @@ export function payMultiplierHelp(): string {
     'Basis points against the city distance band, NOT a rupee amount.',
     '10000 = exactly the band rate (the usual case). 11500 = 15% above it.',
     'Why a multiplier: multiplying every band by one positive number keeps them in order, so a per-rider uplift can never make a 12km drop pay less than a 3km one.',
-    'A flat rupee amount here would reinstate exactly the pay structure that produced a competitor\'s 1.4/5 rating.',
-    'Each drop\'s payout is snapshotted when it is assigned, so changing this later does not change what riders have already earned.',
+    "A flat rupee amount here would reinstate exactly the pay structure that produced a competitor's 1.4/5 rating.",
+    "Each drop's payout is snapshotted when it is assigned, so changing this later does not change what riders have already earned.",
   ].join(' ')
 }

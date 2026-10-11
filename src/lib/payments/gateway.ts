@@ -304,12 +304,18 @@ export class SimulatedPaymentGateway implements PaymentGateway {
     return intent
   }
 
-  async authorize(intent: PaymentIntent, simulate: SimulatedOutcome = 'success'): Promise<PaymentIntent> {
+  async authorize(
+    intent: PaymentIntent,
+    simulate: SimulatedOutcome = 'success',
+  ): Promise<PaymentIntent> {
     await delay(this.cfg.latencyMs)
     return this.#settle(intent, simulate, false)
   }
 
-  async capture(intent: PaymentIntent, simulate: SimulatedOutcome = 'success'): Promise<PaymentIntent> {
+  async capture(
+    intent: PaymentIntent,
+    simulate: SimulatedOutcome = 'success',
+  ): Promise<PaymentIntent> {
     await delay(this.cfg.latencyMs)
     // TTL before outcome: an expired intent is refused regardless of the
     // instrument, which is the real PSP ordering and the one that stops a stale

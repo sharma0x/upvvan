@@ -1,11 +1,14 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
-import { cookies } from 'next/headers'
+import { cookies, headers } from 'next/headers'
 import { notFound, redirect } from 'next/navigation'
 
 import { formatPaise } from '@/lib/catalogue/pricing'
 import { db, loadOrder, loadOrderVerified, normaliseCode, phoneTail } from '@/lib/orders/db'
 import { hsnFor, taxInvoice } from '@/lib/orders/invoice'
+import { authoriseOrderAccess } from '@/lib/orders/access'
+import { guaranteeTerms } from '@/lib/commerce/guarantee'
+import ReviewPrompt from '@/components/catalogue/ReviewPrompt'
 import { orderCookieName, verifyOrderSignature } from '@/lib/orders/cookie'
 import { STATUS_COPY, type OrderStatus } from '@/lib/orders/status'
 import type { OrderEventSummary } from '@/lib/orders/db'
@@ -129,20 +132,6 @@ function addressLines(order: {
   ].filter(Boolean)
 }
 
-/** The guarantee window in hours, from the tier the customer was actually SOLD. */
-function guaranteeHours(tier: string): number {
-  switch (tier) {
-    case 'T0':
-      return 48
-    case 'T1':
-      return 720
-    case 'T2':
-      return 2160
-    default:
-      return 48
-  }
-}
-
 export default async function OrderPage({
   params,
   searchParams,
@@ -164,11 +153,30 @@ export default async function OrderPage({
    *    checkout sets the cookie on the way through, so the clean URL is authorised
    *    on the very next request.
    *
-   * Neither: the code alone is unguessable but NOT authorised — a leaked code from a
-   * screenshot must not render an address and a phone number. So we ask.
+   * 3. A signed-in customer who owns the order. See `lib/orders/access.ts` — this
+   *    used to be cookie-only, which meant the signed-in customer who had just
+   *    been shown this order on `/account` was bounced to the phone prompt for
+   *    their own receipt. Their own order history could not link here.
+   *
+   * Neither: the code alone is unguessable but NOT authorised — a leaked code from
+   * a screenshot must not render an address and a phone number. So we ask.
    */
   const signature = jar.get(orderCookieName(normalised))?.value
-  const alreadyVerified = signature ? verifyOrderSignature(normalised, signature) : false
+  const cookieVerified = signature ? verifyOrderSignature(normalised, signature) : false
+
+  /*
+   * The session is checked BEFORE the redirect dance below, and deliberately.
+   *
+   * A signed-in owner must never be sent to a form asking for the phone number
+   * they already proved ownership of with an OTP — that is a customer typing
+   * their own phone number into a box to look at their own order, which reads as
+   * broken and, worse, as though we had forgotten they signed in.
+   */
+  const access = await authoriseOrderAccess(
+    normalised,
+    (await headers()).get('cookie') ?? undefined,
+  )
+  const alreadyVerified = cookieVerified || access === 'session'
 
   /*
    * ── ALWAYS STRIP THE PHONE ─────────────────────────────────────────────────
@@ -227,10 +235,25 @@ export default async function OrderPage({
   const paid = order.paymentState === 'captured'
   const copy = STATUS_COPY[order.status]
   const invoice = taxInvoice(order.orderCode)
-  const windowHours = guaranteeHours(order.guaranteeTier)
+  /*
+   * The guarantee, read from the price book.
+   *
+   * This page used to carry its own `guaranteeHours()` — a THIRD copy of the
+   * window, in hours, hardcoded as `T0=48 / T1=720 / T2=2160`, with no link to
+   * `lib/commerce/guarantee.ts` and no link to the tiers that module reads from
+   * `price_books.active_guarantee_tier`.
+   *
+   * Three copies in three units is how a customer ends up being told 48 hours on
+   * the order page, 2 days on `/claim`, and 30 days on the policy page, for the
+   * same plant on the same day. `guaranteeTerms` is the one that reads the
+   * authoritative value.
+   */
+  const guarantee = guaranteeTerms(order.guaranteeTier)
+  const timeline = groupTimeline(events)
+  const lastGroup = timeline[timeline.length - 1]
 
   return (
-    <main className="mx-auto max-w-[640px] px-base py-2xl">
+    <main className="px-base py-2xl mx-auto max-w-[640px]">
       {/*
         THE HEADLINE IS THE PAYMENT STATE. It is the first thing on the page and it is
         driven by `paymentState`, never by the order existing. An order that exists
@@ -289,22 +312,24 @@ export default async function OrderPage({
       <p className="text-ink-muted mt-base">{copy.detail}</p>
 
       <section className="mt-xl" aria-labelledby="timeline-heading">
-        <h2 id="timeline-heading" className="mt-0 mb-sm">
+        <h2 id="timeline-heading" className="mb-sm mt-0">
           Where your order is
         </h2>
         <ol className="m-0 flex list-none flex-col p-0" data-testid="order-timeline">
-          {events.map((event, i) => (
+          {groupTimeline(events).map((group) => (
             <TimelineRow
-              key={`${event.status}-${event.at.toISOString()}-${i}`}
-              event={event}
-              last={i === events.length - 1}
+              key={`${group.status}-${group.at.toISOString()}`}
+              status={group.status}
+              at={group.at}
+              notes={group.notes}
+              last={group === lastGroup}
             />
           ))}
         </ol>
       </section>
 
       <section className="mt-2xl" aria-labelledby="receipt-heading" id="receipt">
-        <h2 id="receipt-heading" className="mt-0 mb-xs">
+        <h2 id="receipt-heading" className="mb-xs mt-0">
           Tax invoice
         </h2>
 
@@ -328,11 +353,13 @@ export default async function OrderPage({
 
           <dt className="text-ink-muted">Payment</dt>
           <dd className="m-0">
-            {paid ? `Captured ${indianDateTime(order.capturedAt ?? order.updatedAt)}` : 'Not captured'}
+            {paid
+              ? `Captured ${indianDateTime(order.capturedAt ?? order.updatedAt)}`
+              : 'Not captured'}
           </dd>
         </dl>
 
-        <ul className="gap-sm mt-base m-0 flex list-none flex-col border-t border-border p-0 pt-sm">
+        <ul className="gap-sm mt-base border-border pt-sm m-0 flex list-none flex-col border-t p-0">
           {items.map((item) => (
             <li key={item.id} className="border-border pb-sm flex justify-between border-b">
               <span>
@@ -363,13 +390,13 @@ export default async function OrderPage({
         </p>
 
         <p className="text-ink-muted mt-xs mb-0 text-sm">
-          Prices are inclusive of all taxes, as required by the Legal Metrology (Packaged Commodities)
-          Rules 2011 r.6(1)(e). Free delivery. No minimum order.
+          Prices are inclusive of all taxes, as required by the Legal Metrology (Packaged
+          Commodities) Rules 2011 r.6(1)(e). Free delivery. No minimum order.
         </p>
 
         <div className="border-border mt-lg rounded-sm border">
-          <p className="text-label-caps text-ink-muted mt-0 mb-1 px-base pt-sm">Delivering to</p>
-          <address className="m-0 px-base pb-sm text-sm not-italic">
+          <p className="text-label-caps text-ink-muted px-base pt-sm mt-0 mb-1">Delivering to</p>
+          <address className="px-base pb-sm m-0 text-sm not-italic">
             {addressLines(order).map((line) => (
               <span key={line} className="block">
                 {line}
@@ -380,21 +407,21 @@ export default async function OrderPage({
       </section>
 
       <section className="mt-xl" aria-labelledby="next-heading">
-        <h2 id="next-heading" className="mt-0 mb-xs">
+        <h2 id="next-heading" className="mb-xs mt-0">
           What happens next
         </h2>
-        <ol className="gap-xs text-ink-muted m-0 flex list-decimal flex-col pl-md">
+        <ol className="gap-xs text-ink-muted pl-md m-0 flex list-decimal flex-col">
           <li>Prepaid only — there is no cash-on-delivery option to choose at the door.</li>
           <li>Our rider brings it to {order.pincode}.</li>
           <li>
-            You confirm delivery with an OTP, a photo and a condition check. You have {windowHours}{' '}
-            hours to report damage.
+            You confirm delivery with an OTP and a condition check. Your{' '}
+            {guarantee.label.toLowerCase()} covers you for {guarantee.days} days.
           </li>
         </ol>
 
         <p className="text-ink-muted mt-base text-sm">
-          Plants are replaced, not refunded — the marginal cost is a plant we have already grown. Pots,
-          soil and fertiliser are refunded in money within 24 hours.
+          Plants are replaced, not refunded — the marginal cost is a plant we have already grown.
+          Pots, soil and fertiliser are refunded in money within 24 hours.
         </p>
 
         {order.status === 'DELIVERED' && (
@@ -404,21 +431,79 @@ export default async function OrderPage({
             </Link>
           </p>
         )}
+
+        {/*
+          ── THE REVIEW ─────────────────────────────────────────────────────────
+
+          Asked HERE, on the day the plant lands, rather than on the product page.
+
+          "The plant is smaller than the photo" is the most-cited failure in this
+          category and the answer every serious seller gives is a review wall — but
+          a wall only means something if the reviews are about things people
+          actually received. The product page is where somebody is choosing; this
+          page is where they are holding the plant and have an opinion.
+
+          `Reviews.access.create` is `() => false` and no route existed, so this
+          wall could not be written to at all: zero rows, a `0 from 0` average, and
+          a trigger guarding a table nothing could reach. See `/api/reviews`.
+        */}
+        {order.status === 'DELIVERED' && order.customerPhone && (
+          <section aria-labelledby="review-heading" className="mt-xl">
+            <h3 id="review-heading" className="mb-xs mt-0 text-base">
+              How did it arrive?
+            </h3>
+            <p className="text-ink-muted mt-0 text-sm">
+              If another plant shopper is deciding between this one and something else, your honest
+              two lines are worth more than our copy.
+            </p>
+            <ReviewPrompt
+              orderCode={order.orderCode}
+              phone={order.customerPhone}
+              items={items.map((item) => ({
+                id: item.id,
+                label: `${item.commonName ?? 'Plant'} · ${item.sizeTier}`,
+              }))}
+            />
+          </section>
+        )}
       </section>
 
-      <section className="mt-2xl border-t border-border pt-base">
+      <section className="mt-2xl border-border pt-base border-t">
         <p className="text-label-caps text-ink-muted mt-0 mb-1">Keep this</p>
         <p className="text-ink-muted mt-0 text-sm">
           Your order code is the only thing you need to look this up again — along with the phone
           number on the order.
         </p>
-        <div className="mt-sm flex gap-sm">
-          <Link
-            href={`/invoice/${order.orderCode}`}
-            className="border-border rounded-sm border px-4 py-3 no-underline"
-          >
-            Open printable invoice
-          </Link>
+        <div className="mt-sm gap-sm flex flex-wrap">
+          {/*
+            THE RECEIPT, AS A FILE.
+
+            This is the affordance that did not exist anywhere in the product: a
+            paid order had no download. `/invoice/<code>` renders a document meant
+            for a browser's print dialog, which is the right thing for a human
+            reading it and the wrong thing for someone attaching it to an expense
+            claim three months later.
+
+            Gated on capture, because the receipt is proof of a completed payment
+            and a receipt for money we have not taken is a lie.
+          */}
+          {paid && (
+            <>
+              <a
+                href={`/api/orders/${order.orderCode}/receipt`}
+                data-testid="download-receipt"
+                className="bg-primary text-surface-card inline-flex min-h-[44px] items-center rounded-sm px-4 py-3 no-underline"
+              >
+                Download receipt
+              </a>
+              <Link
+                href={`/invoice/${order.orderCode}`}
+                className="border-border rounded-sm border px-4 py-3 no-underline"
+              >
+                Open printable invoice
+              </Link>
+            </>
+          )}
           <Link
             href="/orders/lookup"
             className="border-border rounded-sm border px-4 py-3 no-underline"
@@ -490,15 +575,88 @@ export default async function OrderPage({
   )
 }
 
-function TimelineRow({ event, last }: { event: OrderEventSummary; last: boolean }) {
-  const copy = STATUS_COPY[event.status as OrderStatus]
+/**
+ * ── WHY THE TIMELINE IS GROUPED ─────────────────────────────────────────────
+ *
+ * `order_events` is append-only, so a fact that does not change the ORDER's state
+ * is recorded at the current state: "a rider has been assigned" is logged against
+ * `PAID`, because the plant has not moved and the customer has not been told
+ * anything new about their parcel.
+ *
+ * Rendering that as a milestone produces two consecutive rows both labelled
+ * "Payment received", one of which says something else entirely. A timeline that
+ * repeats itself teaches a customer to stop reading it — and this one is the
+ * single thing a customer opens the page to check.
+ *
+ * So consecutive events at the same status collapse into one milestone with the
+ * annotations underneath it:
+ *
+ *     ● Payment received
+ *       Payment received in full. Your plant is reserved.        6:14 pm
+ *       A rider has been assigned to your drop.                 6:12 pm
+ *     ● Packed, and with your rider.                            6:40 pm
+ *
+ * `last` is passed down rather than derived from an index because grouping changes
+ * the length, and an index-based "is this the final row" is exactly the sort of
+ * thing that quietly renders the wrong thing after a refactor.
+ */
+interface TimelineGroup {
+  status: OrderStatus
+  at: Date
+  notes: Array<{ note: string; at: Date }>
+}
+
+function groupTimeline(events: OrderEventSummary[]): TimelineGroup[] {
+  const groups: TimelineGroup[] = []
+  for (const event of events) {
+    const status = event.status as OrderStatus
+    const last = groups[groups.length - 1]
+    if (last && last.status === status) {
+      last.notes.push({ note: event.note, at: event.at })
+      // The milestone carries the EARLIEST time it was reached; an annotation
+      // logged after a later milestone would otherwise print a timestamp that
+      // runs backwards down the page.
+      if (event.at < last.at) last.at = event.at
+      continue
+    }
+    groups.push({ status, at: event.at, notes: [{ note: event.note, at: event.at }] })
+  }
+  return groups
+}
+
+function TimelineRow({
+  status,
+  at,
+  notes,
+  last,
+}: {
+  status: OrderStatus
+  at: Date
+  notes: Array<{ note: string; at: Date }>
+  last: boolean
+}) {
+  const copy = STATUS_COPY[status]
   return (
-    <li className="border-border flex gap-sm pb-base" data-status={event.status}>
-      <span aria-hidden="true" className="bg-primary mt-1.5 inline-block h-2 w-2 shrink-0 rounded-full" />
+    <li className="border-border gap-sm pb-base flex" data-status={status}>
+      <span
+        aria-hidden="true"
+        className="bg-primary mt-1.5 inline-block h-2 w-2 shrink-0 rounded-full"
+      />
       <span className={last ? '' : 'flex-1'}>
         <strong className="block">{copy.label}</strong>
-        <span className="text-ink-muted block text-sm">{event.note || copy.detail}</span>
-        <span className="text-ink-muted block text-xs">{indianDateTime(event.at)}</span>
+        {notes.map((entry, i) => (
+          <span key={`${entry.at.toISOString()}-${i}`} className="text-ink-muted block text-sm">
+            {entry.note || copy.detail}
+            <span className="text-xs"> · {indianDateTime(entry.at)}</span>
+          </span>
+        ))}
+        <span className="text-ink-muted block text-xs">
+          {at.toLocaleDateString('en-IN', {
+            day: 'numeric',
+            month: 'short',
+            timeZone: 'Asia/Kolkata',
+          })}
+        </span>
       </span>
     </li>
   )

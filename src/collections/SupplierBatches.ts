@@ -58,7 +58,11 @@ export const SupplierBatches: CollectionConfig = {
       type: 'text',
       admin: { description: 'Supplier GSTIN, where available.' },
     },
-    { name: 'nurseryLocation', type: 'text', admin: { description: 'Where the stock physically is.' } },
+    {
+      name: 'nurseryLocation',
+      type: 'text',
+      admin: { description: 'Where the stock physically is.' },
+    },
     { name: 'dateReceived', type: 'date', required: true },
     { name: 'quantityReceived', type: 'number', required: true },
     {

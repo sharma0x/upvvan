@@ -2,7 +2,10 @@ import Link from 'next/link'
 
 import { AssignButton } from '@/components/ops/AssignButton'
 import { EmptyState, StatusPill } from '@/components/ops/OpsTiles'
+import { ErrorBoundary } from '@/components/ui/ErrorBoundary'
+import { Pagination } from '@/components/ui/Pagination'
 import { formatPaise } from '@/lib/catalogue/pricing'
+import { placedLabel } from '@/lib/dispatch/age'
 import {
   iso,
   loadBands,
@@ -12,6 +15,7 @@ import {
   loadRiders,
   todayRange,
 } from '@/lib/dispatch/store.server'
+import { requireOpsStaff } from '@/lib/dispatch/session.server'
 
 /**
  * The assign queue.
@@ -29,7 +33,24 @@ import {
  */
 export const dynamic = 'force-dynamic'
 
-export default async function OpsQueue() {
+interface OpsQueueProps {
+  searchParams?: Promise<Record<string, string | string[] | undefined>>
+}
+
+export default async function OpsQueue({ searchParams }: OpsQueueProps) {
+  //
+  // GATED. See `requireOpsStaff`: this page renders order codes, pincodes,
+  // revenue, rider names, band rates, payouts and the append-only event ledger.
+  // It had no session check at all, so all of that was readable by anyone who
+  // typed the URL. `noindex` is not access control.
+  await requireOpsStaff('/admin-ops/queue')
+
+  const resolvedParams = searchParams ? await searchParams : {}
+  const rawPage = typeof resolvedParams.page === 'string' ? Number(resolvedParams.page) : 1
+  const rawLimit = typeof resolvedParams.limit === 'string' ? Number(resolvedParams.limit) : 10
+
+  const limit = [10, 25, 50].includes(rawLimit) ? rawLimit : 10
+
   const city = await loadOperationalCity()
   if (!city) {
     return (
@@ -50,6 +71,12 @@ export default async function OpsQueue() {
     loadBands(city.id),
     loadRiderLoads(city.id, day),
   ])
+
+  const total = board.unassigned.length
+  const totalPages = Math.max(1, Math.ceil(total / limit))
+  const page = Number.isInteger(rawPage) && rawPage >= 1 ? Math.min(rawPage, totalPages) : 1
+  const offset = (page - 1) * limit
+  const paginatedOrders = board.unassigned.slice(offset, offset + limit)
 
   /*
    * Load per rider, for the capacity hint on the rider picker. Counted from the
@@ -86,9 +113,10 @@ export default async function OpsQueue() {
       <h1 className="mt-xs mb-0">Assign queue</h1>
 
       <p className="text-ink-muted mt-base mb-xl max-w-[68ch]">
-        Oldest first. A rider pay comes from the distance band the drop falls in, so the distance
-        below is the number that decides what they earn — confirm it rather than accepting the
-        suggestion.
+        Oldest first, and every paid order still waiting — not just today&rsquo;s, because an order
+        from yesterday with no rider is exactly the one you need to see. A rider pay comes from the
+        distance band the drop falls in, so the distance below is the number that decides what they
+        earn — confirm it rather than accepting the suggestion.
       </p>
 
       {board.unassigned.length === 0 ? (
@@ -97,49 +125,58 @@ export default async function OpsQueue() {
           body="Nothing is waiting for a rider. The dispatch board shows what is already on the road."
         />
       ) : (
-        <ul className="m-0 grid list-none gap-base p-0">
-          {board.unassigned.map((order) => (
-            <li key={order.id} id={`order-${order.id}`} className="m-0 scroll-mt-xl p-0">
-              <article className="rounded-lg border border-border bg-surface-card p-lg">
-                <div className="flex flex-wrap items-baseline justify-between gap-sm">
-                  <div>
-                    <h2 className="mt-0 mb-xs font-body-md text-base font-normal">
-                      {order.orderCode}
-                    </h2>
-                    <p className="text-sm text-ink-muted m-0">
-                      {order.pincode} · {order.zoneName ?? 'No zone assigned'} ·{' '}
-                      {order.lineCount} {order.lineCount === 1 ? 'item' : 'items'} ·{' '}
-                      {formatPaise(order.revenuePaise)}
-                    </p>
+        <ErrorBoundary label="Assign Queue">
+          <ul className="gap-base m-0 grid list-none p-0">
+            {paginatedOrders.map((order) => (
+              <li key={order.id} id={`order-${order.id}`} className="scroll-mt-xl m-0 p-0">
+                <article className="border-border bg-surface-card p-lg rounded-lg border">
+                  <div className="gap-sm flex flex-wrap items-baseline justify-between">
+                    <div>
+                      <h2 className="mb-xs font-body-md mt-0 text-base font-normal">
+                        {order.orderCode}
+                      </h2>
+                      <p className="text-ink-muted m-0 text-sm">
+                        {order.pincode} · {order.zoneName ?? 'No zone assigned'} · {order.lineCount}{' '}
+                        {order.lineCount === 1 ? 'item' : 'items'} ·{' '}
+                        {formatPaise(order.revenuePaise)}
+                      </p>
+                    </div>
+                    <StatusPill status={order.orderStatus} />
                   </div>
-                  <StatusPill status={order.orderStatus} />
-                </div>
 
-                <p className="text-sm text-ink-muted mt-sm mb-0">
-                  Placed{' '}
-                  <time dateTime={iso(order.createdAt) ?? undefined}>
-                    {order.createdAt.toLocaleTimeString('en-IN', {
-                      hour: '2-digit',
-                      minute: '2-digit',
-                    })}
-                  </time>
-                </p>
+                  <p className="text-ink-muted mt-sm mb-0 text-sm">
+                    Placed{' '}
+                    <time dateTime={iso(order.createdAt) ?? undefined}>
+                      {placedLabel(order.createdAt)}
+                    </time>
+                  </p>
 
-                <AssignButton
-                  orderId={order.id}
-                  orderCode={order.orderCode}
-                  zoneName={order.zoneName}
-                  suggestedKm={suggestedKmFor()}
-                  riders={riderOptions}
-                  bandRows={bands}
-                />
-              </article>
-            </li>
-          ))}
-        </ul>
+                  <AssignButton
+                    orderId={order.id}
+                    orderCode={order.orderCode}
+                    zoneName={order.zoneName}
+                    suggestedKm={suggestedKmFor()}
+                    riders={riderOptions}
+                    bandRows={bands}
+                  />
+                </article>
+              </li>
+            ))}
+          </ul>
+
+          <Pagination
+            total={total}
+            page={page}
+            limit={limit}
+            basePath="/admin-ops/queue"
+            nounSingle="order"
+            nounPlural="orders"
+            extraParams={resolvedParams}
+          />
+        </ErrorBoundary>
       )}
 
-      <p className="mt-2xl text-sm text-ink-muted">
+      <p className="mt-2xl text-ink-muted text-sm">
         <Link href="/admin-ops/board" className="text-primary underline underline-offset-4">
           See what is already on the road
         </Link>

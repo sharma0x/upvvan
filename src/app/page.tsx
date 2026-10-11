@@ -1,11 +1,16 @@
-import { loadGeo } from '@/lib/geo/loader.server'
-import { loadCatalogue, currentSeasons } from '@/lib/catalogue/loader.server'
-import { leadImagesFor } from '@/lib/catalogue/images'
+import Link from 'next/link'
+
+import { loadStorefront } from '@/lib/commerce/storefront.server'
+import { currentSeasons } from '@/lib/catalogue/loader.server'
+import { COLLECTIONS, collectionSize, BENEFIT_COLLECTIONS } from '@/lib/catalogue/collections'
+import { formatPaise } from '@/lib/catalogue/pricing'
 import Hero from '@/components/storefront/Hero'
 import TrustRail from '@/components/storefront/TrustRail'
-import RoomFacets from '@/components/storefront/RoomFacets'
 import Catalogue from '@/components/storefront/Catalogue'
 import Provenance from '@/components/storefront/Provenance'
+import CollectionTiles from '@/components/catalogue/CollectionTiles'
+import NotOpenYet from '@/components/storefront/NotOpenYet'
+import { loadCityRefs } from '@/lib/geo/cities.server'
 
 /**
  * The storefront.
@@ -25,8 +30,9 @@ import Provenance from '@/components/storefront/Provenance'
  *
  * So: proof, then the coverage answer, then the guarantees that make the promise
  * believable, then the room facets that stop a first plant being placed in a
- * windowless flat, then the catalogue, then the provenance that explains all of
- * it. Each section answers the objection the previous one raised.
+ * windowless flat, then the catalogue, then the collections and the provenance
+ * that explain all of it. Each section answers the objection the previous one
+ * raised.
  *
  * Layout and palette come from design/MOOD-BOARD.html, which sampled the live
  * homepages of ugaoo.com, bloomscape.com, thesill.com, heyrooted.com,
@@ -34,48 +40,19 @@ import Provenance from '@/components/storefront/Provenance'
  * remains normative — this page uses no literal colour values.
  */
 export default async function Home() {
-  const geo = await loadGeo()
+  const storefront = await loadStorefront()
 
   /*
-   * Pick ONE city deliberately, and fail loudly if there is not exactly one.
+   * The coverage checker's city list.
    *
-   * The first version took `cities[0]` from the active list. That is wrong in a
-   * way that only shows up in production: the order is whatever Postgres
-   * returned first, so a stray test city with `is_active = true` silently
-   * becomes the storefront — every customer sees the wrong city's catalogue.
-   *
-   * Deterministic instead: pick by slug, and if more than one city is active say
-   * so. Ambiguity here is an operator decision (which city is the shop?), not
-   * something to resolve by array order.
+   * This was `[]` — a hardcoded empty array — which rendered a `<select>` with no
+   * options above the "Check coverage" button. Both cities were in the database the
+   * whole time; the list was simply never read from anywhere.
    */
-  const active = geo.cities.filter((c) => c.isActive)
-  const DEFAULT_CITY_SLUG = 'bengaluru'
-  let city = active.find((c) => c.slug === DEFAULT_CITY_SLUG) ?? null
+  const cities = await loadCityRefs()
+  if (storefront.state === 'no-city') return <NotOpenYet heading="We have not opened yet" />
 
-  if (!city && active.length === 1) city = active[0]!
-
-  if (active.length > 1 && city) {
-    console.warn(
-      `[catalogue] ${active.length} cities are active (${active
-        .map((c) => c.slug)
-        .join(', ')}). Showing ${city.slug}. One city is the storefront — ` +
-        'switch the others off in HQ admin.',
-    )
-  }
-
-  if (!city) {
-    return (
-      <main id="main" tabIndex={-1} className="px-base py-2xl mx-auto max-w-[640px]">
-        <h1 className="my-sm">We have not opened yet</h1>
-        <p className="text-ink-muted mt-0">
-          A city appears here once its state horticulture licence is approved and its serviceable
-          pincodes are imported — both enforced by the database, not by convention.
-        </p>
-      </main>
-    )
-  }
-  const cityId = geo.cityIdBySlug.get(city.slug)!
-  const items = await loadCatalogue(cityId)
+  const { cityName, items, facets, terms } = storefront
   const seasons = currentSeasons()
 
   /*
@@ -97,36 +74,96 @@ export default async function Home() {
    */
   const seasonNote =
     seasons[0] === 'summer'
-      ? `It is ${seasons[0]} here — March to June runs 40–46°C in ${city.name}. We list only what survives that, and we swap the catalogue as the season turns rather than pausing the shop.`
+      ? `It is ${seasons[0]} here — March to June runs 40–46°C in ${cityName}. We list only what survives that, and we swap the catalogue as the season turns rather than pausing the shop.`
       : seasons[0] === 'monsoon'
-        ? `It is ${seasons[0]} in ${city.name}. Drainage matters more than anything else right now — every plant below ships in a pot that will not waterlog.`
-        : `${plants.length} species are in their window for ${city.name} this ${seasons[0]}.`
+        ? `It is ${seasons[0]} in ${cityName}. Drainage matters more than anything else right now — every plant below ships in a pot that will not waterlog.`
+        : `${plants.length} species are in their window for ${cityName} this ${seasons[0]}.`
 
   /*
-   * Resolve artwork ONCE for the whole grid rather than inside each card.
-   * `leadImagesFor` de-duplicates across the set, so calling it per-card would
-   * give every card an independently-hashed image and adjacent rows would repeat
-   * the same photograph.
+   * The collection rails, with their live counts.
+   *
+   * These link to PAGES, not to filter states, because that is what the
+   * competition's SEO engine is made of — Kyari derives ~250 indexable
+   * collection URLs from a room × benefit matrix and Urvann publishes a seasonal
+   * axis nobody else in India has. The homepage is where those pages get their
+   * internal links, and an internal link from the most-visited page is worth
+   * more than the same link from anywhere else.
+   *
+   * A collection with nothing in it right now is not rendered at all, which is
+   * the difference between a nav and a wishlist — see `CollectionTiles`.
    */
-  const art = leadImagesFor(plants.map((i) => i.slug))
+  const roomTiles = COLLECTIONS.filter((c) => c.axis === 'room')
+  const benefitTiles = BENEFIT_COLLECTIONS
+  const summerTiles = COLLECTIONS.filter(
+    (c) => c.handle === 'summer-safe-plants' && collectionSize(facets, c) !== null,
+  )
 
   return (
     <main id="main" tabIndex={-1}>
-      <Hero cities={active} cityName={city.name} seasonNote={seasonNote} />
+      <Hero cities={cities} cityName={cityName} seasonNote={seasonNote} />
 
-      <TrustRail />
-
-      <RoomFacets items={plants} />
+      {/*
+        The guarantee rail reads its copy from the price book now. It used to
+        hardcode "48-hour arrival guarantee" and "Two acres in Bengaluru" as
+        literals, which meant changing a commercial decision required a deploy
+        and there were four copies of the window to keep in step — the exact
+        failure Ugaoo is currently living with, shipping two contradictory
+        guarantee policies at once.
+      */}
+      <TrustRail terms={terms} />
 
       <Catalogue
         plants={plants}
         consumables={consumables}
         seasonNote={seasonNote}
-        cityName={city.name}
-        art={art}
+        cityName={cityName}
       />
 
-      <Provenance cityName={city.name} />
+      {/*
+        The browsable pages. Placed between the grid and the provenance so a
+        customer who has decided they want to shop by room has the route before
+        they hit the footer, and so the crawlers get internal links from the
+        home page rather than only from the sitemap.
+      */}
+      <div className="border-border mt-3xl px-base pt-2xl mx-auto max-w-[1120px] border-t">
+        <CollectionTiles
+          items={facets}
+          collections={roomTiles}
+          heading="Start from the room, not the species name"
+          description="Most people kill their first plant by choosing something that needs a window they do not have. These pages are organised by where the plant will actually live."
+        />
+
+        <div className="mt-3xl">
+          <CollectionTiles
+            items={facets}
+            collections={benefitTiles}
+            heading="Or from what you need it to be"
+            description="Pet-safe, edible, and the two claims we are careful about — read how we pick before you trust them."
+          />
+        </div>
+
+        {/*
+          The seasonal note, as a link. Urvann publishes `summer-plants` with
+          4,529 SKUs and no Indian competitor publishes a ship-calendar at all.
+          In April this is the most useful page on the site and it costs one
+          link.
+        */}
+        {summerTiles.length > 0 && seasons[0] === 'summer' && (
+          <aside className="border-warning bg-surface-raised mt-3xl p-lg rounded-md border">
+            <h2 className="mt-0">It is {cityName}&rsquo;s summer</h2>
+            <p className="mb-sm">
+              March to June runs 40–46°C here, and it is the reason our catalogue changes shape
+              three times a year. We swap species rather than pause the shop, and every plant we
+              still list in April is one we grew outdoors through a full summer.
+            </p>
+            <Link href="/collections/summer-safe-plants" className="text-primary underline">
+              What survives a Bengaluru summer →
+            </Link>
+          </aside>
+        )}
+      </div>
+
+      <Provenance cityName={cityName} />
 
       {/*
         A page-local POLICY note, deliberately not a <footer>.
@@ -137,10 +174,15 @@ export default async function Home() {
         on first — and two <footer> elements in one document is invalid HTML
         besides.
       */}
-      <p className="mx-auto mt-3xl max-w-[1120px] border-border text-ink-muted border-t px-base pt-base text-sm">
+      <p className="border-border text-ink-muted mt-3xl px-base pt-base mx-auto max-w-[1120px] border-t text-sm">
         Prepaid only. No cash on delivery — a returned plant is unsellable, so we do not create the
         return leg. Every listing states its size, light requirement and watering interval before
-        you buy, and every dimension is measured at the bench rather than estimated.
+        you buy, and every dimension is measured at the bench rather than estimated. Cheapest plant
+        in season today:{' '}
+        {plants.length > 0
+          ? formatPaise(Math.min(...plants.map((p) => p.ladder[0]!.totalPaise)))
+          : '—'}
+        .
       </p>
     </main>
   )

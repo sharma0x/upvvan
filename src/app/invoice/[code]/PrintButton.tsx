@@ -33,7 +33,7 @@ export default function PrintButton({ invoiceNumber }: { invoiceNumber: string }
       <button
         type="button"
         data-testid="print-invoice"
-        className="print:hidden border-border cursor-pointer rounded-sm border px-4 py-2 text-sm"
+        className="border-border cursor-pointer rounded-sm border px-4 py-2 text-sm print:hidden"
         onClick={() => {
           // The document title becomes the default PDF filename. Putting the invoice
           // number in it means a customer's Downloads folder has six files called
@@ -46,7 +46,7 @@ export default function PrintButton({ invoiceNumber }: { invoiceNumber: string }
       >
         Print / save as PDF
       </button>
-      <p className="print:hidden text-ink-muted m-0 text-xs">
+      <p className="text-ink-muted m-0 text-xs print:hidden">
         Your browser&apos;s print dialogue can save this as a PDF.
       </p>
     </div>

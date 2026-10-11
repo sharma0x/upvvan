@@ -256,12 +256,18 @@ describe('order status state machine', () => {
     it('names the ALTER TYPE statement in the error', () => {
       const message = missingEnumValueError('CANCELLED').message
       expect(message).toContain('CANCELLED')
-      expect(message).toContain("ALTER TYPE")
+      expect(message).toContain('ALTER TYPE')
       expect(message).toContain('enum_orders_status')
     })
 
     it('passes once the four values exist', () => {
-      const AFTER = [...BEFORE_MIGRATION, 'PAYMENT_PENDING', 'PAID', 'OUT_FOR_DELIVERY', 'CANCELLED']
+      const AFTER = [
+        ...BEFORE_MIGRATION,
+        'PAYMENT_PENDING',
+        'PAID',
+        'OUT_FOR_DELIVERY',
+        'CANCELLED',
+      ]
       for (const status of ORDER_STATUSES) {
         expect(supportsDatabaseStatus(AFTER, status)).toBe(true)
       }

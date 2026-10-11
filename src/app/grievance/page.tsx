@@ -1,4 +1,4 @@
-import { config } from '@/lib/config'
+import { loadBusinessSettings } from '@/lib/settings/server'
 
 /**
  * Grievance redressal — Consumer Protection (E-Commerce) Rules 2020.
@@ -19,8 +19,19 @@ export const metadata = {
   title: 'Grievance redressal',
 }
 
-export default function GrievancePage() {
-  const c = config.compliance
+/*
+ * This page read `config.compliance` and NOTHING else — no database at all. So the
+ * one screen a Legal Metrology or Consumer Protection (E-Commerce) Rules r.4(4)
+ * inspection reads was the one screen the owner could not correct from the admin
+ * panel. A misspelt registered address here is a compliance defect, not a typo.
+ *
+ * `force-dynamic` alongside it, because a page that reads a database row and
+ * declares itself static serves the value it had at build time until a redeploy.
+ */
+export const dynamic = 'force-dynamic'
+
+export default async function GrievancePage() {
+  const c = await loadBusinessSettings()
 
   return (
     <main id="main" tabIndex={-1} className="px-base py-2xl mx-auto max-w-[640px]">
@@ -59,12 +70,12 @@ export default function GrievancePage() {
       <h2 className="mt-xl mb-xs">What we commit to</h2>
       <ul className="gap-xs pl-md text-ink-muted mt-0 flex list-disc flex-col">
         <li>
-          <strong className="text-ink">Acknowledged within 48 hours</strong>, with a ticket
-          number you can quote.
+          <strong className="text-ink">Acknowledged within {c.grievanceResponseHours} hours</strong>
+          , with a ticket number you can quote.
         </li>
         <li>
-          <strong className="text-ink">Resolved within 30 days</strong>, or you are told why
-          it is taking longer and what happens next.
+          <strong className="text-ink">Resolved within {c.replacementWindowDays} days</strong>, or
+          you are told why it is taking longer and what happens next.
         </li>
         <li>
           A plant that arrives damaged or dead is{' '}
@@ -72,8 +83,8 @@ export default function GrievancePage() {
         </li>
         <li>
           Consumables (pots, soil, fertiliser) are{' '}
-          <strong className="text-ink">refunded in money within 24 hours</strong> with no
-          mortality risk involved.
+          <strong className="text-ink">refunded in money within 24 hours</strong> with no mortality
+          risk involved.
         </li>
       </ul>
 

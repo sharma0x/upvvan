@@ -171,14 +171,15 @@ export const Riders: CollectionConfig = {
       required: true,
       defaultValue: 10_000,
       admin: { description: payMultiplierHelp() },
-      validate: (value: number | null | undefined) => isValidPayPaise(value, 'Pay multiplier', true),
+      validate: (value: number | null | undefined) =>
+        isValidPayPaise(value, 'Pay multiplier', true),
     },
     {
       name: 'maxDropsPerDay',
       type: 'number',
       admin: {
         description:
-          'Per-rider capacity override. Leave empty to use the zone\'s max_daily_drops. Set a lower number for a rider on a two-wheeler, an auto, or a reduced day.',
+          "Per-rider capacity override. Leave empty to use the zone's max_daily_drops. Set a lower number for a rider on a two-wheeler, an auto, or a reduced day.",
       },
       validate: (value: number | null | undefined) =>
         value == null || (Number.isInteger(value) && value > 0)

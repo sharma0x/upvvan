@@ -18,8 +18,7 @@ export const Species: CollectionConfig = {
     useAsTitle: 'commonName',
     group: 'Catalogue',
     defaultColumns: ['commonName', 'botanicalName', 'difficulty', 'toxicity', 'light'],
-    description:
-      'Global plant catalogue with care profiles. Written once, sold in every city.',
+    description: 'Global plant catalogue with care profiles. Written once, sold in every city.',
   },
   access: {
     read: () => true, // public: the storefront renders species without auth
@@ -42,6 +41,51 @@ export const Species: CollectionConfig = {
       index: true,
     },
     { name: 'description', type: 'textarea' },
+    {
+      name: 'summary',
+      type: 'text',
+      admin: {
+        description:
+          "One line, the benefit, in the seller's voice. Sits under the botanical name on the card and the PDP. Ugaoo's is 'Designers’ favourite statement plant' — a reason, not a restatement of the name.",
+      },
+    },
+    {
+      name: 'benchNote',
+      type: 'textarea',
+      admin: {
+        description:
+          'What actually arrives in the parcel, measured at the bench. THIS is the field the audit says matters most: the single most-complained-about failure in the category is the plant being smaller than the photo, and the fix is a sentence that says what you will really get.',
+      },
+    },
+
+    // ── The three filter flags the collection pages are generated from ──────
+    //
+    // Each one exists because a URL needs to be derivable from data rather than
+    // maintained by hand. `/collections/air-purifying-plants` and
+    // `/collections/plants-that-are-safe-around-cats-and-dogs` are indexable
+    // pages; if they were maintained as hand-written lists they would drift out
+    // of the catalogue within a week and start selling plants we do not stock.
+    {
+      name: 'edible',
+      type: 'checkbox',
+      defaultValue: false,
+      admin: { description: 'Edible — powers the kitchen-windowsill collection.' },
+    },
+    {
+      name: 'airPurifying',
+      type: 'checkbox',
+      defaultValue: false,
+      admin: {
+        description:
+          'Meaningfully raises humidity / filters particulates. Deliberately NOT claimed by default: the copy on that page says plainly that no plant replaces ventilation.',
+      },
+    },
+    {
+      name: 'vastuFriendly',
+      type: 'checkbox',
+      defaultValue: false,
+      admin: { description: 'Traditionally placed for benefit in a home or work desk.' },
+    },
 
     // ── Care profile ────────────────────────────────────────────────────────
     // Copied verbatim from the best-transferred mechanic in the research: a
@@ -102,6 +146,73 @@ export const Species: CollectionConfig = {
           },
         },
       ],
+    },
+
+    // ── The long-form care guide ────────────────────────────────────────────
+    //
+    // Structured, not a blob of rich text, and the field names are the seven
+    // headings Bloomscape ships as an ACF group: LIGHT · WATER · HUMIDITY ·
+    // TEMPERATURE · FOOD · TOXICITY · ADDITIONAL CARE. Toxicity is derived from
+    // `care.toxicity` above so it cannot contradict the safety filter, which is
+    // why it is not repeated here.
+    //
+    // Structured because each of these paragraphs is a merchandising surface:
+    // the WATER paragraph is what makes the soil-moisture figure credible, and
+    // a blob of prose cannot be linked to a bag of cocopeat. Bloomscape
+    // cross-links every care paragraph to a purchasable accessory and that is
+    // the cheapest upsell in the category.
+    {
+      type: 'group',
+      name: 'careGuide',
+      admin: {
+        description: 'Long-form care guide, field by field. Powers /care/[slug].',
+      },
+      fields: [
+        {
+          name: 'light',
+          type: 'textarea',
+          admin: { description: 'What light it wants, in words. Not the dropdown value.' },
+        },
+        {
+          name: 'water',
+          type: 'textarea',
+          admin: {
+            description:
+              'As a soil-moisture instruction, not a calendar. "Water when the top 50% is dry" is testable; "water weekly" is not.',
+          },
+        },
+        { name: 'humidity', type: 'textarea' },
+        { name: 'temperature', type: 'textarea' },
+        {
+          name: 'feeding',
+          type: 'textarea',
+          admin: { description: 'What to feed it, and when to feed it nothing.' },
+        },
+        {
+          name: 'additional',
+          type: 'textarea',
+          admin: { description: 'Dust, stake, prune, repot.' },
+        },
+      ],
+    },
+
+    // ── The witness for a safety claim ──────────────────────────────────────
+    //
+    // `care.toxicity = 'safe'` is a claim that a household with a cat will act
+    // on, and it drives an entire indexable collection page. It is therefore
+    // the one boolean in this collection that cannot be set by optimism: a
+    // migration CHECK refuses `safe` without a date, so somebody has to have
+    // gone to the bench and checked it against a reference.
+    //
+    // Deliberately a date rather than a boolean. "We checked it at some point"
+    // is not a durable fact; a date is, and a stale one is visible.
+    {
+      name: 'toxicityWitnessedAt',
+      type: 'date',
+      admin: {
+        description:
+          'When the non-toxic claim was verified at the bench. REQUIRED before `care.toxicity` may be set to "Safe" — a database CHECK enforces it.',
+      },
     },
 
     // ── Seasonal availability ───────────────────────────────────────────────
