@@ -5,6 +5,25 @@ import { loadGeo } from '@/lib/geo/loader.server'
 import { loadCatalogue } from '@/lib/catalogue/loader.server'
 
 /**
+ * `force-dynamic` is load-bearing, not a default.
+ *
+ * A metadata file compiles to a Route Handler, and Route Handlers are CACHED BY
+ * DEFAULT. Left alone, `next build` prerenders this once and writes the result
+ * to `.next/server/app/sitemap.xml.body` — the build output shows it as
+ * `○ (Static)`. That file is then served verbatim, for as long as the deployment
+ * lives, and the seasonal argument below stops being true.
+ *
+ * The failure is silent and it is not a crash. The `catch` at the bottom of this
+ * function means a build that cannot reach the database still succeeds, and it
+ * bakes the three static entries in. That build looks fine and ships a sitemap
+ * advertising a shop with no products — which is precisely the "dead page"
+ * problem this file exists to prevent.
+ *
+ * `src/app/__tests__/sitemap-not-frozen.test.ts` fails if this line is removed.
+ */
+export const dynamic = 'force-dynamic'
+
+/**
  * sitemap.xml — generated from the LIVE catalogue, not a static list.
  *
  * ── WHY THIS IS DYNAMIC AND WHY THAT MATTERS HERE SPECIFICALLY ────────────────
