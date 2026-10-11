@@ -104,7 +104,7 @@ export default async function SavedPlantsPage() {
   return (
     <main>
       <h2 className="mb-xs mt-0">Saved plants</h2>
-      <p className="text-ink-muted mt-0 max-w-[62ch]">
+      <p className="text-ink-muted mt-0">
         Our catalogue changes with the season and a plant genuinely sells out. Save one and we will
         tell you when it returns — no need to ask.
       </p>

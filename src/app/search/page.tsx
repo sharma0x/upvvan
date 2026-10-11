@@ -10,6 +10,8 @@ import { BATCH_SIZE } from '@/lib/catalogue/paging'
 import { firstBatch } from '@/lib/catalogue/grid.server'
 import { rowsFor } from '@/lib/catalogue/query.server'
 import NotOpenYet from '@/components/storefront/NotOpenYet'
+import ProseSplit from '@/components/layout/ProseSplit'
+import { WIDE } from '@/components/layout/containers'
 import Breadcrumbs from '@/components/seo/Breadcrumbs'
 
 /**
@@ -107,13 +109,19 @@ export default async function SearchPage({
     : []
 
   return (
-    <main id="main" tabIndex={-1} className="px-base pt-base mx-auto max-w-[1120px]">
+    <main id="main" tabIndex={-1} className={`pt-base ${WIDE}`}>
       <Breadcrumbs trail={[{ href: '/', label: 'Home' }, { label: 'Search' }]} />
 
       <header className="mt-lg">
-        <h1 className="mb-0">
-          {query ? <>Search for &ldquo;{query}&rdquo;</> : 'Search the catalogue'}
-        </h1>
+        {/*
+          Split: the results grid below is three across and needs the width, and
+          the search field belongs beside the heading rather than under it —
+          which is also the order that answers "what do I type" fastest.
+        */}
+        <ProseSplit>
+          <h1 className="mb-0 max-w-[20ch]">
+            {query ? <>Search for &ldquo;{query}&rdquo;</> : 'Search the catalogue'}
+          </h1>
 
         {/*
           The form again, in the page. A customer who arrives at /search with no
@@ -124,7 +132,7 @@ export default async function SearchPage({
           role="search"
           action="/search"
           method="get"
-          className="gap-sm mt-sm flex max-w-[560px]"
+          className="gap-sm mt-0 flex max-w-[560px] lg:mt-0"
         >
           <label htmlFor="q" className="sr-only">
             Search plants by name, botanical name or description
@@ -145,6 +153,7 @@ export default async function SearchPage({
             Search
           </button>
         </form>
+        </ProseSplit>
       </header>
 
       {query && (

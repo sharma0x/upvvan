@@ -13,6 +13,8 @@ import { rowsFor } from '@/lib/catalogue/query.server'
 import Breadcrumbs from '@/components/seo/Breadcrumbs'
 import FaqAccordion from '@/components/seo/FaqAccordion'
 import NotOpenYet from '@/components/storefront/NotOpenYet'
+import ProseSplit from '@/components/layout/ProseSplit'
+import { WIDE } from '@/components/layout/containers'
 
 /**
  * One occasion — `/gifting/[occasion]`.
@@ -125,7 +127,7 @@ export default async function OccasionPage({ params }: { params: Promise<{ occas
 
   return (
     <main id="main" tabIndex={-1}>
-      <div className="px-base pt-base mx-auto max-w-[1120px]">
+      <div className={`pt-base ${WIDE}`}>
         <Breadcrumbs
           trail={[
             { href: '/', label: 'Home' },
@@ -135,20 +137,28 @@ export default async function OccasionPage({ params }: { params: Promise<{ occas
         />
       </div>
 
-      <header className="border-border px-base pt-lg pb-lg mx-auto max-w-[1120px] border-b">
-        <p className="text-label-caps text-clay m-0">
-          {def.label} · {cityName} ·{' '}
-          {rows.length === 0
-            ? 'nothing in season'
-            : `${rows.length} plant${rows.length === 1 ? '' : 's'}`}
-        </p>
-        <h1 className="mt-xs mb-0 max-w-[22ch]">{def.headline}</h1>
-        <p className="text-ink-muted mt-sm mb-0 max-w-[66ch] text-[1.05rem] leading-relaxed">
-          {def.body}
-        </p>
+      <header className={`border-border pt-lg pb-lg ${WIDE} border-b`}>
+        {/*
+          Split for the same reason as `/gifting`: the plant grid below needs the
+          1120px container, and a lone 66ch paragraph inside it left the right
+          half of the header empty. The count line and the headline lead; the
+          body copy explains why this occasion is not the other nine.
+        */}
+        <ProseSplit>
+          <div>
+            <p className="text-label-caps text-clay m-0">
+              {def.label} · {cityName} ·{' '}
+              {rows.length === 0
+                ? 'nothing in season'
+                : `${rows.length} plant${rows.length === 1 ? '' : 's'}`}
+            </p>
+            <h1 className="mt-xs mb-0 max-w-[20ch]">{def.headline}</h1>
+          </div>
+          <p className="text-ink-muted mt-0 mb-0 text-[1.05rem] leading-relaxed">{def.body}</p>
+        </ProseSplit>
       </header>
 
-      <div className="px-base py-xl mx-auto max-w-[1120px]">
+      <div className={`py-xl ${WIDE}`}>
         {rows.length === 0 ? (
           /*
             Honest, and it names the cause. The catalogue is filtered to what can
@@ -202,8 +212,12 @@ export default async function OccasionPage({ params }: { params: Promise<{ occas
               to describe a product.
             */}
             <section className="border-primary bg-brand-soft mt-3xl p-lg rounded-md border">
-              <h2 className="mt-0">Before you send this one</h2>
-              <p className="mt-sm mb-0 max-w-[62ch]">{def.note}</p>
+              <ProseSplit>
+                <div>
+                  <h2 className="mt-0">Before you send this one</h2>
+                </div>
+                <p className="mt-0 mb-0 text-[1.05rem] leading-relaxed">{def.note}</p>
+              </ProseSplit>
             </section>
 
             {/*
@@ -212,24 +226,32 @@ export default async function OccasionPage({ params }: { params: Promise<{ occas
               that is the mistake that turns a gift order into a return trip.
             */}
             <section className="mt-2xl">
-              <h2 className="mb-0">How the delivery works</h2>
-              <p className="text-ink-muted mt-sm mb-base max-w-[62ch]">{def.delivery}</p>
-              <ul className="text-ink-muted gap-sm m-0 flex list-none flex-wrap p-0">
-                <li className="border-border bg-surface-card rounded-sm border px-3 py-2 text-sm">
-                  Free handwritten note, up to 280 characters
-                </li>
-                <li className="border-border bg-surface-card rounded-sm border px-3 py-2 text-sm">
-                  No prices on the card or the packing slip
-                </li>
-                <li className="border-border bg-surface-card rounded-sm border px-3 py-2 text-sm">
-                  Prepaid only — a returned plant is unsellable
-                </li>
-              </ul>
-              <p className="m-0">
-                <Link href="/order/checkout" className="text-primary min-h-[44px] underline">
-                  See the full landed total before you press anything
-                </Link>
-              </p>
+              <ProseSplit>
+                <div>
+                  <h2 className="mb-0">How the delivery works</h2>
+                </div>
+                <div>
+                  <p className="text-ink-muted mt-0 mb-base text-[1.05rem] leading-relaxed">
+                    {def.delivery}
+                  </p>
+                  <ul className="text-ink-muted m-0 grid list-none grid-cols-1 gap-sm p-0 sm:grid-cols-3">
+                    <li className="border-border bg-surface-card rounded-sm border px-3 py-2 text-sm">
+                      Free handwritten note, up to 280 characters
+                    </li>
+                    <li className="border-border bg-surface-card rounded-sm border px-3 py-2 text-sm">
+                      No prices on the card or the packing slip
+                    </li>
+                    <li className="border-border bg-surface-card rounded-sm border px-3 py-2 text-sm">
+                      Prepaid only — a returned plant is unsellable
+                    </li>
+                  </ul>
+                  <p className="mt-base mb-0">
+                    <Link href="/order/checkout" className="text-primary min-h-[44px] underline">
+                      See the full landed total before you press anything
+                    </Link>
+                  </p>
+                </div>
+              </ProseSplit>
             </section>
 
             {def.faq.length > 0 && (
@@ -250,7 +272,7 @@ export default async function OccasionPage({ params }: { params: Promise<{ occas
         {siblings.length > 0 && (
           <section className="border-border bg-surface-raised mt-3xl p-lg rounded-md border">
             <h2 className="mt-0">A different occasion</h2>
-            <p className="text-ink-muted mt-xs mb-base max-w-[62ch]">
+            <p className="text-ink-muted mt-xs mb-base text-[1.05rem] leading-relaxed">
               Every one of these has plants behind it right now. Occasions with nothing in season
               are left off this list on purpose — a link to an empty grid is worse than no link.
             </p>

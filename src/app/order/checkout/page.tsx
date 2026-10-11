@@ -5,6 +5,7 @@ import { loadStorefront } from '@/lib/commerce/storefront.server'
 import { config } from '@/lib/config'
 import CheckoutClient from './CheckoutClient'
 import NotOpenYet from '@/components/storefront/NotOpenYet'
+import { FORM } from '@/components/layout/containers'
 
 /**
  * Checkout.
@@ -46,12 +47,12 @@ export default async function CheckoutPage() {
   const { terms, cityName } = storefront
 
   return (
-    <main id="main" tabIndex={-1} className="px-base py-2xl mx-auto max-w-[880px]">
+    <main id="main" tabIndex={-1} className={`py-2xl ${FORM}`}>
       <Link href="/cart" className="text-primary text-sm no-underline hover:underline">
         ← Back to cart
       </Link>
       <h1 className="my-sm">Checkout</h1>
-      <p className="text-ink-muted mt-0 max-w-[62ch]">
+      <p className="text-ink-muted mt-0">
         No account needed. Enter where it is going and pay. You will get a message when your plant
         leaves the bench and again when a rider is on the way.
       </p>

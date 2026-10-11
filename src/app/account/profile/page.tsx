@@ -24,7 +24,7 @@ export default async function ProfilePage() {
   return (
     <main>
       <h2 className="mb-xs mt-0">Your details</h2>
-      <p className="text-ink-muted mt-0 max-w-[62ch]">
+      <p className="text-ink-muted mt-0">
         Two things we ask for, and neither of them is a password. Your name goes on the invoice and
         tells the rider who to ask for. Your email is a spare — a copy you can keep, not the channel
         we rely on.

@@ -7,6 +7,8 @@ import { PostCard } from '@/components/content/PostCard'
 import { resolvePostArt } from '@/lib/content/art.server'
 import Breadcrumbs from '@/components/seo/Breadcrumbs'
 import NotOpenYet from '@/components/storefront/NotOpenYet'
+import ProseSplit from '@/components/layout/ProseSplit'
+import { WIDE } from '@/components/layout/containers'
 
 /**
  * The problem library — `/problems`.
@@ -91,16 +93,19 @@ export default async function ProblemsIndexPage() {
   ]
 
   return (
-    <main id="main" tabIndex={-1} className="px-base py-base mx-auto max-w-[1120px]">
+    <main id="main" tabIndex={-1} className={`py-base ${WIDE}`}>
       <Breadcrumbs trail={[{ href: '/', label: 'Home' }, { label: 'Something looks wrong' }]} />
 
-      <header className="mt-lg max-w-[68ch]">
-        <h1 className="mb-0">Something looks wrong</h1>
-        <p className="text-ink-muted mt-sm mb-0 text-[1.05rem] leading-relaxed">
-          Start from what you can see rather than what you think it is. Every page here is the
-          question a customer types at 11pm with a plant they are worried about, answered with the
-          cause and the fix first and the explanation second.
-        </p>
+      <header className="mt-lg">
+        {/* Split: the symptom grid below is three across and needs the width. */}
+        <ProseSplit>
+          <h1 className="mb-0 max-w-[20ch]">Something looks wrong</h1>
+          <p className="text-ink-muted mt-0 mb-0 text-[1.05rem] leading-relaxed">
+            Start from what you can see rather than what you think it is. Every page here is the
+            question a customer types at 11pm with a plant they are worried about, answered with the
+            cause and the fix first and the explanation second.
+          </p>
+        </ProseSplit>
       </header>
 
       {ordered.length === 0 ? (

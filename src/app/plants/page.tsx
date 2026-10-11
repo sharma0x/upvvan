@@ -13,6 +13,8 @@ import { readSort, rowsFor } from '@/lib/catalogue/query.server'
 import FacetControls from '@/components/catalogue/FacetControls'
 import CollectionTiles from '@/components/catalogue/CollectionTiles'
 import NotOpenYet from '@/components/storefront/NotOpenYet'
+import ProseSplit from '@/components/layout/ProseSplit'
+import { WIDE } from '@/components/layout/containers'
 
 /**
  * The catalogue — `/plants`.
@@ -152,19 +154,32 @@ export default async function PlantsPage({
         A customer who arrived from a shared link needs to know what the URL
         meant before they trust the grid below it.
       */}
-      <header className="border-border px-base pt-2xl pb-lg mx-auto max-w-[1120px] border-b">
-        <p className="text-label-caps text-clay m-0">
-          {storefront.cityName} · {all.length} listing{all.length === 1 ? '' : 's'} in season
-        </p>
-        <h1 className="mt-xs mb-0">Every plant we can honestly sell you right now</h1>
-        <p className="text-ink-muted mt-sm mb-0 max-w-[62ch]">
-          March to June runs 40–46°C in {storefront.cityName}, and that is why the catalogue changes
-          shape three times a year. We swap species rather than pause the shop, so what you see here
-          is what is genuinely on the bench this month. Pot choice is on each plant&rsquo;s page.
-        </p>
+      <header className={`border-border pt-2xl pb-lg ${WIDE} border-b`}>
+        {/*
+          Split, because this page has a genuine two-column body underneath it
+          (facets left, grid right) and the header was the one place still
+          spending 1120px on a single 62ch paragraph. Left is what you are
+          looking at; right is why it is a different list this month.
+        */}
+        <ProseSplit>
+          <div>
+            <p className="text-label-caps text-clay m-0">
+              {storefront.cityName} · {all.length} listing{all.length === 1 ? '' : 's'} in season
+            </p>
+            <h1 className="mt-xs mb-0 max-w-[20ch]">
+              Every plant we can honestly sell you right now
+            </h1>
+          </div>
+          <p className="text-ink-muted mt-0 mb-0 text-[1.05rem] leading-relaxed">
+            March to June runs 40–46°C in {storefront.cityName}, and that is why the catalogue
+            changes shape three times a year. We swap species rather than pause the shop, so what
+            you see here is what is genuinely on the bench this month. Pot choice is on each
+            plant&rsquo;s page.
+          </p>
+        </ProseSplit>
       </header>
 
-      <div className="gap-xl px-base py-xl mx-auto grid max-w-[1120px] lg:grid-cols-[280px_1fr]">
+      <div className={`gap-xl py-xl ${WIDE} grid lg:grid-cols-[280px_1fr]`}>
         <div>
           {/*
             `useSearchParams` inside a client component forces the subtree to be
@@ -235,7 +250,7 @@ export default async function PlantsPage({
         here would render before them — invalid HTML, and it would push the
         compliance block below a paragraph.
       */}
-      <p className="border-border text-ink-muted mt-3xl px-base pt-base mx-auto max-w-[1120px] border-t text-sm">
+      <p className={`border-border text-ink-muted mt-3xl pt-base ${WIDE} border-t text-sm`}>
         Prepaid only. No cash on delivery — a returned plant is unsellable, so we do not create the
         return leg. Every listing states its size, light requirement and watering interval before
         you buy, and every dimension is measured at the bench rather than estimated.

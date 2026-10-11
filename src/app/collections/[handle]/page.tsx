@@ -11,6 +11,8 @@ import { rowsFor } from '@/lib/catalogue/query.server'
 import CollectionTiles from '@/components/catalogue/CollectionTiles'
 import Breadcrumbs from '@/components/seo/Breadcrumbs'
 import NotOpenYet from '@/components/storefront/NotOpenYet'
+import ProseSplit from '@/components/layout/ProseSplit'
+import { WIDE } from '@/components/layout/containers'
 
 /**
  * A collection page — `/collections/[handle]`.
@@ -120,7 +122,7 @@ export default async function CollectionPage({ params }: { params: Promise<{ han
 
   return (
     <main id="main" tabIndex={-1}>
-      <div className="px-base pt-base mx-auto max-w-[1120px]">
+      <div className={`pt-base ${WIDE}`}>
         <Breadcrumbs
           trail={[
             { href: '/', label: 'Home' },
@@ -130,15 +132,20 @@ export default async function CollectionPage({ params }: { params: Promise<{ han
         />
       </div>
 
-      <header className="border-border px-base pt-lg pb-lg mx-auto max-w-[1120px] border-b">
-        <p className="text-label-caps text-clay m-0">
-          {rows.length} plant{rows.length === 1 ? '' : 's'} · {storefront.cityName}
-        </p>
-        <h1 className="mt-xs mb-0 max-w-[20ch]">{def.headline}</h1>
-        <p className="mt-sm mb-0 max-w-[68ch] text-[1.05rem] leading-relaxed">{def.body}</p>
+      <header className={`border-border pt-lg pb-lg ${WIDE} border-b`}>
+        {/* Split: the grid below needs 1120px, the header did not use it. */}
+        <ProseSplit>
+          <div>
+            <p className="text-label-caps text-clay m-0">
+              {rows.length} plant{rows.length === 1 ? '' : 's'} · {storefront.cityName}
+            </p>
+            <h1 className="mt-xs mb-0 max-w-[20ch]">{def.headline}</h1>
+          </div>
+          <p className="text-ink-muted mt-0 mb-0 text-[1.05rem] leading-relaxed">{def.body}</p>
+        </ProseSplit>
       </header>
 
-      <div className="px-base py-xl mx-auto max-w-[1120px]">
+      <div className={`py-xl ${WIDE}`}>
         {rows.length === 0 ? (
           /*
             Honest, and it names the reason. This is the same situation Kyari and
@@ -168,9 +175,9 @@ export default async function CollectionPage({ params }: { params: Promise<{ han
 
       {/* How the list was built. Three lines; the most trust-building copy here. */}
       <section className="border-border bg-surface-raised border-y">
-        <div className="px-base py-lg mx-auto max-w-[1120px]">
+        <div className={`py-lg ${WIDE}`}>
           <h2 className="mt-0 text-[1.2rem]">How we decide what is on this page</h2>
-          <p className="text-ink-muted mt-xs mb-sm max-w-[62ch]">
+          <p className="text-ink-muted mt-xs mb-sm text-[1.05rem] leading-relaxed">
             No hand-picked lists. Every plant on this page satisfies all of these, taken straight
             from the record our growers keep at the bench — so if a plant is not here, that is a
             measurement and not an opinion.
@@ -189,7 +196,7 @@ export default async function CollectionPage({ params }: { params: Promise<{ han
       </section>
 
       {def.faq.length > 0 && (
-        <section className="px-base py-xl mx-auto max-w-[1120px]">
+        <section className={`py-xl ${WIDE}`}>
           <h2 className="mt-0">Questions we get about this</h2>
           <div className="mt-base gap-lg grid lg:grid-cols-2">
             {def.faq.map((entry) => (
@@ -204,7 +211,7 @@ export default async function CollectionPage({ params }: { params: Promise<{ han
 
       {rows.length > 0 && siblings.length > 0 && (
         <section className="border-border bg-surface-raised border-t">
-          <div className="px-base py-xl mx-auto max-w-[1120px]">
+          <div className={`py-xl ${WIDE}`}>
             <CollectionTiles
               items={storefront.facets}
               collections={siblings}

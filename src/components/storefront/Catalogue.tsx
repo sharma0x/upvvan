@@ -5,6 +5,8 @@ import { resolveArt } from '@/components/catalogue/ItemGrid'
 import PagedItemGrid from '@/components/catalogue/PagedItemGrid'
 import { BATCH_SIZE } from '@/lib/catalogue/paging'
 import { firstBatch } from '@/lib/catalogue/grid.server'
+import ProseSplit from '@/components/layout/ProseSplit'
+import { WIDE } from '@/components/layout/containers'
 
 /**
  * The seasonal catalogue grid.
@@ -46,12 +48,20 @@ export default function Catalogue({
   const restArt = resolveArt(consumables, new Set([...plantArt.values()].map((i) => i.index)))
 
   return (
-    <section id="catalogue" className="scroll-mt-lg px-base pt-3xl mx-auto max-w-[1120px]">
-      <p className="text-label-caps text-clay m-0">
-        {cityName} · {plants.length} listing{plants.length === 1 ? '' : 's'} in season
-      </p>
-      <h2 className="mt-xs mb-0">What we can honestly sell you right now</h2>
-      <p className="text-ink-muted mt-xs mb-lg max-w-[62ch]">{seasonNote}</p>
+    <section id="catalogue" className={`scroll-mt-lg pt-3xl ${WIDE}`}>
+      {/*
+        Split, same reason as every other wide page: the grid needs 1120px and
+        the heading above it was a 62ch paragraph alone in that width.
+      */}
+      <ProseSplit>
+        <div>
+          <p className="text-label-caps text-clay m-0">
+            {cityName} · {plants.length} listing{plants.length === 1 ? '' : 's'} in season
+          </p>
+          <h2 className="mt-xs mb-0">What we can honestly sell you right now</h2>
+        </div>
+        <p className="text-ink-muted mt-0 mb-lg text-[1.05rem] leading-relaxed">{seasonNote}</p>
+      </ProseSplit>
 
       {plants.length === 0 ? (
         <p className="border-warning bg-surface-raised p-lg rounded-md border">
@@ -83,7 +93,7 @@ export default function Catalogue({
         <div className="border-border bg-surface-raised mt-2xl p-lg rounded-lg border">
           <div className="gap-base flex flex-wrap items-baseline justify-between">
             <h3 className="m-0">Soil, feed &amp; tools</h3>
-            <p className="text-ink-muted m-0 max-w-[52ch] text-sm">
+            <p className="text-ink-muted m-0 text-sm">
               Cheaper than a plant to send and worth more to a plant that survives. Prepaid, and the
               only thing on this site we refund in money.
             </p>

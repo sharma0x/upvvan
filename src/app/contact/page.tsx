@@ -6,6 +6,7 @@ import { loadBusinessSettings } from '@/lib/settings/server'
 import ContactForm from '@/components/contact/ContactForm'
 import Breadcrumbs from '@/components/seo/Breadcrumbs'
 import NotOpenYet from '@/components/storefront/NotOpenYet'
+import { FORM } from '@/components/layout/containers'
 
 /**
  * Contact — `/contact`.
@@ -80,12 +81,12 @@ export default async function ContactPage() {
   const whatsappDigits = s.whatsappDigits
 
   return (
-    <main id="main" tabIndex={-1} className="px-base py-base mx-auto max-w-[880px]">
+    <main id="main" tabIndex={-1} className={`py-base ${FORM}`}>
       <Breadcrumbs trail={[{ href: '/', label: 'Home' }, { label: 'Contact us' }]} />
 
       <header className="mt-lg">
         <h1 className="mb-0">Talk to a grower</h1>
-        <p className="text-ink-muted mt-sm mb-0 max-w-[62ch] text-[1.05rem] leading-relaxed">
+        <p className="text-ink-muted mt-sm mb-0 text-[1.05rem] leading-relaxed">
           Not a chatbot and not a ticket queue that takes four days. You will get an answer from
           somebody who grows plants, and we will tell you the response time we actually keep rather
           than the one we would like to.
@@ -274,7 +275,7 @@ export default async function ContactPage() {
       */}
       <section className="border-border mt-3xl pt-base border-t">
         <h2 className="mt-0">Where the plants are</h2>
-        <p className="text-ink-muted mt-xs max-w-[62ch]">
+        <p className="text-ink-muted mt-xs text-[1.05rem] leading-relaxed">
           {s.principalAddress}. Visit by appointment — we are a working nursery, not a shop floor,
           and the plants that are not yet listed are the ones to ask about.{' '}
           <Link href="/about" className="text-primary underline">

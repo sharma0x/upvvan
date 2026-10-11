@@ -5,6 +5,7 @@ import { loadStorefront } from '@/lib/commerce/storefront.server'
 import { leadImagesForExcluding } from '@/lib/catalogue/images'
 import PlantFinder from '@/components/catalogue/PlantFinder'
 import NotOpenYet from '@/components/storefront/NotOpenYet'
+import { PROSE } from '@/components/layout/containers'
 import Breadcrumbs from '@/components/seo/Breadcrumbs'
 
 /**
@@ -46,12 +47,12 @@ export default async function QuizPage() {
   const images = Object.fromEntries([...resolved].map(([slug, img]) => [slug, img]))
 
   return (
-    <main id="main" tabIndex={-1} className="px-base py-base mx-auto max-w-[760px]">
+    <main id="main" tabIndex={-1} className={`py-base ${PROSE}`}>
       <Breadcrumbs trail={[{ href: '/', label: 'Home' }, { label: 'Find your plant' }]} />
 
       <header className="mt-lg">
         <h1 className="mb-0">Four questions, and we will tell you the answer</h1>
-        <p className="text-ink-muted mt-sm mb-0 max-w-[62ch] text-[1.05rem] leading-relaxed">
+        <p className="text-ink-muted mt-sm mb-0 text-[1.05rem] leading-relaxed">
           Every other plant quiz starts by asking how bright your room is, which is a question
           nobody can answer. This one asks what you actually know about your flat — and it is
           willing to say that nothing we sell suits it, which is more use than a plant that dies in

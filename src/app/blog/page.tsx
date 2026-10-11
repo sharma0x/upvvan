@@ -9,6 +9,8 @@ import { PostCard, PostList } from '@/components/content/PostCard'
 import { resolvePostArt } from '@/lib/content/art.server'
 import Breadcrumbs from '@/components/seo/Breadcrumbs'
 import NotOpenYet from '@/components/storefront/NotOpenYet'
+import ProseSplit from '@/components/layout/ProseSplit'
+import { WIDE } from '@/components/layout/containers'
 
 /**
  * The blog index — `/blog`.
@@ -53,16 +55,19 @@ export default async function BlogIndexPage() {
   const art = resolvePostArt([...problems, ...articles])
 
   return (
-    <main id="main" tabIndex={-1} className="px-base py-base mx-auto max-w-[1120px]">
+    <main id="main" tabIndex={-1} className={`py-base ${WIDE}`}>
       <Breadcrumbs trail={[{ href: '/', label: 'Home' }, { label: 'Plant care' }]} />
 
-      <header className="mt-lg max-w-[68ch]">
-        <h1 className="mb-0">Plant care</h1>
-        <p className="text-ink-muted mt-sm mb-0 text-[1.05rem] leading-relaxed">
-          Written by the people who grow the plants, in the light and the weather we actually have.
-          Most of it answers a specific question rather than explaining botany, because that is what
-          arrives in the inbox.
-        </p>
+      <header className="mt-lg">
+        {/* Split: the diagnosis rail below is three across and needs the width. */}
+        <ProseSplit>
+          <h1 className="mb-0">Plant care</h1>
+          <p className="text-ink-muted mt-0 mb-0 text-[1.05rem] leading-relaxed">
+            Written by the people who grow the plants, in the light and the weather we actually
+            have. Most of it answers a specific question rather than explaining botany, because that
+            is what arrives in the inbox.
+          </p>
+        </ProseSplit>
       </header>
 
       {problems.length > 0 && (

@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { requireCustomer } from '@/lib/auth/session'
 import { greetingFor, loadProfile } from '@/lib/accounts/profile'
 import SignOutButton from '@/components/auth/SignOutButton'
+import { FORM } from '@/components/layout/containers'
 
 /**
  * Account shell — the authenticated customer's own area.
@@ -96,7 +97,7 @@ export default async function AccountLayout({ children }: { children: ReactNode 
     : ''
 
   return (
-    <div className="px-base py-2xl mx-auto max-w-[880px]">
+    <div className={`py-2xl ${FORM}`}>
       <header className="gap-base flex items-start">
         {monogram && (
           <span

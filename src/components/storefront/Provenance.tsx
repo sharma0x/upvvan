@@ -1,3 +1,6 @@
+import ProseSplit from '@/components/layout/ProseSplit'
+import { WIDE } from '@/components/layout/containers'
+
 /**
  * The provenance band.
  *
@@ -47,15 +50,20 @@ const STEPS = [
 
 export default function Provenance({ cityName }: { cityName: string }) {
   return (
-    <section className="px-base pt-3xl mx-auto max-w-[1120px]" aria-labelledby="prov-heading">
-      <p className="text-label-caps text-clay m-0">Where your plant actually comes from</p>
-      <h2 id="prov-heading" className="mt-xs mb-0">
-        Grown forty minutes away. Not shipped to you.
-      </h2>
-      <p className="text-ink-muted mt-xs mb-lg max-w-[62ch]">
-        Almost every plant sold online in India travels four to seven days in a box. Ours does not.
-        That single difference is the reason the promises above us are cheap to keep.
-      </p>
+    <section className={`pt-3xl ${WIDE}`} aria-labelledby="prov-heading">
+      {/* Split: the four-step grid below is two across and needs the width. */}
+      <ProseSplit>
+        <div>
+          <p className="text-label-caps text-clay m-0">Where your plant actually comes from</p>
+          <h2 id="prov-heading" className="mt-xs mb-0">
+            Grown forty minutes away. Not shipped to you.
+          </h2>
+        </div>
+        <p className="text-ink-muted mt-0 mb-lg text-[1.05rem] leading-relaxed">
+          Almost every plant sold online in India travels four to seven days in a box. Ours does not.
+          That single difference is the reason the promises above us are cheap to keep.
+        </p>
+      </ProseSplit>
 
       <ol className="border-border m-0 grid list-none grid-cols-1 gap-0 rounded-lg border p-0 md:grid-cols-2">
         {STEPS.map((s, i) => (

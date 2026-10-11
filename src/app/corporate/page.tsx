@@ -14,6 +14,7 @@ import {
 } from '@/lib/commerce/corporate'
 import Breadcrumbs from '@/components/seo/Breadcrumbs'
 import NotOpenYet from '@/components/storefront/NotOpenYet'
+import { PROSE } from '@/components/layout/containers'
 import FaqAccordion, { type FaqEntry } from '@/components/seo/FaqAccordion'
 
 /**
@@ -120,7 +121,7 @@ export default async function CorporatePage() {
   }
 
   return (
-    <main id="main" tabIndex={-1} className="px-base py-base mx-auto max-w-[920px]">
+    <main id="main" tabIndex={-1} className={`py-base ${PROSE}`}>
       <Breadcrumbs trail={[{ href: '/', label: 'Home' }, { label: 'Corporate gifting' }]} />
 
       {/*
@@ -135,7 +136,7 @@ export default async function CorporatePage() {
       <header className="mt-lg">
         <p className="text-label-caps text-clay mb-xs mt-0">Corporate gifting</p>
         <h1 className="mb-0">Compare us without making a phone call</h1>
-        <p className="text-ink-muted mt-sm mb-0 max-w-[64ch] text-[1.05rem] leading-relaxed">
+        <p className="text-ink-muted mt-sm mb-0  text-[1.05rem] leading-relaxed">
           A procurement manager should be able to compare three suppliers without making three phone
           calls. Kyari ends every corporate page with a number, FNP starts with a four-step human
           funnel and a MOQ of 50, and IGP will not let you order on the website at all. So here is
@@ -168,7 +169,7 @@ export default async function CorporatePage() {
       */}
       <section className="mt-3xl">
         <h2 className="mt-0">What a quote is, and what it costs</h2>
-        <p className="text-ink-muted mt-xs max-w-[64ch]">
+        <p className="text-ink-muted mt-xs ">
           One e-mail, sent within a working day, containing:
         </p>
         <ul className="mt-base gap-sm flex flex-col p-0">
@@ -209,7 +210,7 @@ export default async function CorporatePage() {
       */}
       <section id="price-list" className="mt-3xl scroll-mt-lg">
         <h2 className="mt-0">The price list</h2>
-        <p className="text-ink-muted mt-xs max-w-[64ch]">
+        <p className="text-ink-muted mt-xs ">
           Our minimum is <strong>{CORPORATE_MOQ} plants</strong> — deliberately low. FNP will not
           look at an order under 50 and IGP tells you to write to sales@igp.com, so a team of twenty
           is an order our competitors hand to somebody else. We publish a maximum too:{' '}
@@ -302,7 +303,7 @@ export default async function CorporatePage() {
       */}
       <section className="mt-3xl">
         <h2 className="mt-0">What we cannot do</h2>
-        <p className="text-ink-muted mt-xs max-w-[64ch]">
+        <p className="text-ink-muted mt-xs ">
           Five things, published in advance. If any of them rules out your order, you now know that
           before you have spent an hour finding out.
         </p>
@@ -379,7 +380,7 @@ export default async function CorporatePage() {
       */}
       <section className="mt-3xl">
         <h2 className="mt-0">A care workshop, included from 50 plants</h2>
-        <p className="text-ink-muted mt-xs max-w-[64ch]">
+        <p className="text-ink-muted mt-xs ">
           Twenty minutes on a video call, for the people receiving the plants, run by whoever grew
           them. Bloomscape and The Sill give this away with every bulk order in the US and not one
           Indian supplier does, which tells you the objection it answers is not being answered

@@ -348,7 +348,7 @@ export default function PlantFinder({ items, images }: Props) {
         {result.suggestedCollections.length > 0 && (
           <section className="mt-3xl">
             <h2 className="mt-0">Pages that go deeper on this</h2>
-            <p className="text-ink-muted mt-xs mb-base max-w-[62ch]">
+            <p className="text-ink-muted mt-xs mb-base">
               These are articles rather than filters — they explain why, which is the half of the
               decision a checkbox cannot do.
             </p>
@@ -406,7 +406,7 @@ export default function PlantFinder({ items, images }: Props) {
       </ol>
 
       <h2 className="mt-xl mb-0 max-w-[22ch]">{current.question}</h2>
-      <p className="text-ink-muted mt-sm max-w-[62ch]">{current.why}</p>
+      <p className="text-ink-muted mt-sm">{current.why}</p>
 
       {/*
         The buttons are `min-h-[56px]`, not 44. These are the only interactive

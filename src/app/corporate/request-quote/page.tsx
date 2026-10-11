@@ -13,6 +13,7 @@ import {
 } from '@/lib/commerce/corporate'
 import Breadcrumbs from '@/components/seo/Breadcrumbs'
 import NotOpenYet from '@/components/storefront/NotOpenYet'
+import { FORM } from '@/components/layout/containers'
 import QuoteForm from './QuoteForm'
 
 /**
@@ -67,7 +68,7 @@ export default async function RequestQuotePage() {
   const latestDate = latestDeliveryDate()
 
   return (
-    <main id="main" tabIndex={-1} className="px-base py-base mx-auto max-w-[760px]">
+    <main id="main" tabIndex={-1} className={`py-base ${FORM}`}>
       <Breadcrumbs
         trail={[
           { href: '/', label: 'Home' },
@@ -78,7 +79,7 @@ export default async function RequestQuotePage() {
 
       <header className="mt-lg">
         <h1 className="mb-0">Request a quote</h1>
-        <p className="text-ink-muted mt-sm mb-0 max-w-[62ch] text-[1.05rem] leading-relaxed">
+        <p className="text-ink-muted mt-sm mb-0 text-[1.05rem] leading-relaxed">
           About two minutes, and it costs nothing. Put your quantity in and you will see the tier,
           the order value and the delivery lead time on this page before you send a single field.
           The quote comes back as a written document with the GST itemised — not a request for a
@@ -128,7 +129,7 @@ export default async function RequestQuotePage() {
 
       <section className="mt-3xl">
         <h2 className="mt-0">The form</h2>
-        <p className="text-ink-muted mt-xs max-w-[62ch] text-sm">
+        <p className="text-ink-muted mt-xs text-sm">
           Everything with a star is required. The two optional boxes — a budget and a date — are
           genuinely optional: a buyer who has not been given either can still ask, and we would
           rather have the enquiry than a made-up figure.
@@ -145,7 +146,7 @@ export default async function RequestQuotePage() {
       */}
       <section className="mt-3xl">
         <h2 className="mt-0">The published price list</h2>
-        <p className="text-ink-muted mt-xs max-w-[62ch]">
+        <p className="text-ink-muted mt-xs">
           All prices per plant, GST included, minimum {CORPORATE_MOQ} plants. The estimate above is
           computed from this same table — there is no second price list.
         </p>

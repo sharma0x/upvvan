@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { loadStorefront } from '@/lib/commerce/storefront.server'
 import Breadcrumbs from '@/components/seo/Breadcrumbs'
 import NotOpenYet from '@/components/storefront/NotOpenYet'
+import { PROSE } from '@/components/layout/containers'
 
 /**
  * Claims — `/claim`.
@@ -59,12 +60,12 @@ export default async function ClaimIndexPage() {
   const window = terms.terms.arrivalWindowHours
 
   return (
-    <main id="main" tabIndex={-1} className="px-base py-base mx-auto max-w-[760px]">
+    <main id="main" tabIndex={-1} className={`py-base ${PROSE}`}>
       <Breadcrumbs trail={[{ href: '/', label: 'Home' }, { label: 'Report a problem' }]} />
 
       <header className="mt-lg">
         <h1 className="mb-0">Something is wrong with a plant</h1>
-        <p className="text-ink-muted mt-sm mb-0 max-w-[62ch] text-[1.05rem] leading-relaxed">
+        <p className="text-ink-muted mt-sm mb-0 text-[1.05rem] leading-relaxed">
           One photograph and your order code. That is the whole thing — and you will hear from a
           grower rather than a ticket system.
         </p>

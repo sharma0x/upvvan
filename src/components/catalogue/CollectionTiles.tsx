@@ -54,7 +54,7 @@ export default function CollectionTiles({
   return (
     <section>
       <Heading className="mb-0">{heading}</Heading>
-      {description && <p className="text-ink-muted mt-xs mb-base max-w-[62ch]">{description}</p>}
+      {description && <p className="text-ink-muted mt-xs mb-base">{description}</p>}
 
       <ul className="gap-sm m-0 grid list-none grid-cols-1 p-0 sm:grid-cols-2 lg:grid-cols-3">
         {live.map(({ def, size }) => (

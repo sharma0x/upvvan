@@ -5,6 +5,7 @@ import { loadStorefront } from '@/lib/commerce/storefront.server'
 import { loadBusinessSettings } from '@/lib/settings/server'
 import Breadcrumbs from '@/components/seo/Breadcrumbs'
 import NotOpenYet from '@/components/storefront/NotOpenYet'
+import { PROSE } from '@/components/layout/containers'
 import TrackOrderForm from '@/components/support/TrackOrderForm'
 
 /**
@@ -67,12 +68,12 @@ export default async function TrackOrderPage() {
   const { terms, cityName } = storefront
 
   return (
-    <main id="main" tabIndex={-1} className="px-base py-base mx-auto max-w-[760px]">
+    <main id="main" tabIndex={-1} className={`py-base ${PROSE}`}>
       <Breadcrumbs trail={[{ href: '/', label: 'Home' }, { label: 'Track an order' }]} />
 
       <header className="mt-lg">
         <h1 className="mb-0">Where is my plant?</h1>
-        <p className="text-ink-muted mt-sm mb-0 max-w-[62ch] text-[1.05rem] leading-relaxed">
+        <p className="text-ink-muted mt-sm mb-0 text-[1.05rem] leading-relaxed">
           Your order code is in the confirmation message and on the receipt. You need that and the
           mobile number on the order — no account, no password, nothing to set up.
         </p>
