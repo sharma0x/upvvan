@@ -311,7 +311,15 @@ async function main() {
             // a re-provision after a wipe is reproducible. 99 is not a real Indian
             // mobile prefix, which is deliberate: these must never reach a customer's
             // SMS. Real riders are entered in the admin panel.
-            `9900000${String(index + 1).padStart(4, '0')}`,
+            //
+            // TEN digits, because that is what sign-in accepts. This was
+            // `9900000` + padStart(4) — seven plus four — which produced ELEVEN
+            // digit numbers ("99000000001"), and `/api/rider/session` matches
+            // `^[6-9]\d{9}$`. Every seeded rider was therefore un-signable: the
+            // seed reported success, the roster rendered, and the only symptom
+            // was a rider typing a number off their own card and being told
+            // "Enter your 10-digit phone number." Six plus four is ten.
+            `990000${String(index + 1).padStart(4, '0')}`,
             blrId,
             zoneIdByName.get(zone.name),
           ],
