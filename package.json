@@ -4,9 +4,10 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "next dev --webpack",
+    "dev": "next dev --webpack --port 3100",
+    "dev:default": "next dev --webpack",
     "build": "payload generate:types && next build --webpack",
-    "start": "next start",
+    "start": "next start --port 3100",
     "lint": "eslint .",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
