@@ -454,6 +454,42 @@ describe('C-1 · customer identity has exactly one owner', () => {
       ).toBeGreaterThan(0)
     })
 
+    it('the addresses table exists and is owned by the customer owner', async () => {
+      // Added after `make db-migrate` was run with Payload BEFORE better-auth.
+      // `20261005_000008_addresses` gates its whole CREATE TABLE on better-auth's
+      // "user" existing, so with the runners reversed it warned, returned, and
+      // recorded itself as applied — leaving a database with NO addresses table.
+      // `/account/addresses` and `POST /api/addresses` would 500 with
+      // `relation "addresses" does not exist`, and no assertion in the repository
+      // looked for the table at all, so nothing failed until a customer did.
+      if (!dbAvailable || !pool) return
+
+      const { rows: table } = await pool.query(
+        `SELECT 1 FROM information_schema.tables
+          WHERE table_schema='public' AND table_name='addresses'`,
+      )
+      expect(
+        table.length,
+        'The addresses table does not exist. 20261005_000008_addresses skips itself ' +
+          'when better-auth\'s "user" table is missing — check the order in `make db-migrate`.',
+      ).toBeGreaterThan(0)
+
+      const { rows } = await pool.query<{ table_name: string }>(
+        `SELECT ccu.table_name AS table_name
+           FROM information_schema.table_constraints tc
+           JOIN information_schema.constraint_column_usage ccu
+             ON ccu.constraint_name = tc.constraint_name
+          WHERE tc.constraint_type = 'FOREIGN KEY'
+            AND tc.table_name = 'addresses'
+            AND ccu.table_name = 'user'`,
+      )
+      expect(
+        rows.length,
+        'addresses.customer_id must have an FK to the customer owner — otherwise a ' +
+          'saved address can point at a customer that does not exist.',
+      ).toBeGreaterThan(0)
+    })
+
     it('one verified phone cannot create two customer rows', async () => {
       if (!dbAvailable || !pool) return
 

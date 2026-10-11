@@ -255,11 +255,35 @@ storage-bucket: ## Create the S3 bucket (RustFS does NOT auto-create buckets)
 
 # ── Database ────────────────────────────────────────────────────────────────
 
-db-migrate: ## Run Payload migrations, then better-auth's
+# ORDER IS LOAD-BEARING. better-auth runs FIRST, and reversing it is a silent
+# data-loss bug, not a cosmetic change.
+#
+# Two migrations in src/migrations/ are gated on better-auth's `"user"` table
+# existing:
+#
+#   20261005_000006_customer_identity_fk  → orders.customer_id FK to "user"
+#   20261005_000008_addresses             → the ENTIRE addresses table, whose
+#                                           customer_id is a FK to "user"
+#
+# Both `console.warn` and `return` when "user" is absent, so that a bare
+# `pnpm payload migrate` on an already-migrated database does not fail. The cost
+# is that on a FRESH database they also skip — and `payload_migrations` records
+# them as applied, so they never run again.
+#
+# With Payload first, a from-scratch `make db-migrate` produced a database with
+# no FK on orders.customer_id and no `addresses` table AT ALL, and reported
+# success. `single-customer-identity.test.ts` caught the FK; nothing caught the
+# table until a customer opened /account/addresses.
+#
+# better-auth's migrate is idempotent and its tables (`user`, `session`,
+# `account`, `verification`) collide with nothing Payload owns — Payload's staff
+# collection is `users`, plural. So running it first is safe on a fresh database
+# and a no-op on an existing one.
+db-migrate: ## Run better-auth's migrations, then Payload's
+	@echo "→ better-auth (customer identity — C-1) — FIRST: Payload's FKs depend on its tables"
+	pnpm exec better-auth migrate --config src/lib/auth.ts -y
 	@echo "→ Payload migrations"
 	pnpm payload migrate
-	@echo "→ better-auth (customer identity — C-1)"
-	pnpm exec better-auth migrate --config src/lib/auth.ts -y
 	@echo "✓ migrations applied"
 
 db-migrate-create: ## Create a migration. Usage: make db-migrate-create MSG='...'
@@ -277,7 +301,7 @@ seed-content: ## Seed the blog, the symptom library and the care cross-links
 	node --env-file=.env --import tsx/esm scripts/seed-content.ts
 
 seed: ## Seed Phase 0 data (Bengaluru live, Hyderabad pending licence)
-	pnpm exec tsx scripts/seed-phase0.ts
+	pnpm seed
 
 seed-phase0: seed ## Alias
 
