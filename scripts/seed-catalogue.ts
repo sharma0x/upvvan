@@ -585,6 +585,29 @@ async function main() {
           ],
         )
         skuCount++
+
+        /*
+         * `sku_stock` row for the plant.
+         *
+         * This was missing, and it is why every plant on the storefront read
+         * "Sold out" while the three consumables beside them were in stock. The
+         * consumable loop below already did this; the plant loop did not, so all
+         * 12 published plant SKUs had NO row at all. The loader LEFT-JOINs
+         * `sku_stock` and COALESCEs a missing row to 0, which is the correct
+         * reading of "nobody has counted this" — so 12 plants rendered as sold
+         * out, the add-to-cart button was disabled, and no test failed, because
+         * the join was working exactly as written.
+         *
+         * `DO NOTHING`, not `DO UPDATE`: re-seeding must not reset a real count.
+         * A seed that clobbers stock silently resurrects sold-out plants and
+         * re-creates the oversell this whole table exists to prevent.
+         */
+        await client.query(
+          `INSERT INTO sku_stock (sku_id, stock_on_hand, updated_at, created_at)
+           SELECT id, 200, now(), now() FROM skus WHERE sku_code = $1
+           ON CONFLICT (sku_id) DO NOTHING`,
+          [code],
+        )
       }
     }
 
