@@ -25,11 +25,25 @@ async function exec<T = any>(text: string, values: unknown[] = []): Promise<T[]>
   return res.rows as T[]
 }
 
-/** Run a statement inside a transaction and ROLLBACK, so nothing persists. */
-async function attempt(statement: string, values: unknown[] = []): Promise<string> {
+/**
+ * Run a statement inside a transaction and ROLLBACK, so nothing persists.
+ *
+ * `setup` runs first, on the SAME client, so a test can build the row it is
+ * about to corrupt instead of borrowing one that happens to be lying around.
+ * That distinction matters: an UPDATE whose WHERE clause matches zero rows is
+ * accepted by Postgres vacuously, so a test that "proves" a constraint by
+ * updating `orders_items` on a database that has no orders is testing the
+ * emptiness of the database.
+ */
+async function attempt(
+  statement: string,
+  values: unknown[] = [],
+  setup?: (client: import('pg').PoolClient) => Promise<void>,
+): Promise<string> {
   const client = await pool!.connect()
   try {
     await client.query('BEGIN')
+    if (setup) await setup(client)
     await client.query(statement, values as never[])
     await client.query('ROLLBACK')
     return 'ACCEPTED'
@@ -245,9 +259,31 @@ describe('launch blockers — illegal direct writes only', () => {
 
     it('REJECTS a negative line price', async () => {
       if (!connected) return
+      // The line is built here, in this transaction, rather than selected from
+      // `orders_items`. See `attempt`: an UPDATE over an empty table is
+      // ACCEPTED, so "the last order line" made this test a probe of whether the
+      // database happened to contain orders. It failed on a freshly migrated and
+      // seeded database — which is a database this project ships — and passed on
+      // one that had been clicked through, which is not evidence of anything.
       const msg = await attempt(
-        `UPDATE "orders_items" SET "price_paise" = -99999 WHERE "id" = (
-           SELECT "id" FROM "orders_items" ORDER BY "_order" DESC LIMIT 1)`,
+        `UPDATE "orders_items" SET "price_paise" = -99999 WHERE "id" = 'TEST-NEG-LINE'`,
+        [],
+        async (client) => {
+          await client.query(
+            `INSERT INTO "orders" ("order_code","city_id","status","payment_mode","pincode",
+                                    "revenue_paise","contribution_paise","updated_at","created_at")
+             VALUES ('TEST-NEG-LINE', $1, 'PLACED', 'prepaid', '560001', 100, 10, now(), now())`,
+            [bengaluruId],
+          )
+          const order = await client.query<{ id: number }>(
+            `SELECT "id" FROM "orders" WHERE "order_code" = 'TEST-NEG-LINE'`,
+          )
+          await client.query(
+            `INSERT INTO "orders_items" ("id","_order","_parent_id","sku_id","price_paise")
+             VALUES ('TEST-NEG-LINE', 1, $1, $2, 100)`,
+            [order.rows[0]!.id, plantSkuId],
+          )
+        },
       )
       expect(msg).not.toBe('ACCEPTED')
       expect(msg).toMatch(/orders_items_price_is_paise/)
